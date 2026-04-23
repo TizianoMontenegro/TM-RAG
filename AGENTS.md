@@ -10,35 +10,30 @@
 
 ## Commands
 
-### Install Dependencies
 ```bash
-uv sync
+uv sync                                  # Install deps
+uv run ruff check .                      # Lint
+uv run ruff format .                     # Format
+uv run pytest                         # Test (all)
+uv run pytest path -v                  # Test (single)
+uv run python -m uvicorn main:app --reload  # Dev server
 ```
 
-### Linting
-```bash
-uv run ruff check .
-```
+## Architecture
 
-### Formatting
-```bash
-uv run ruff format .
-```
-
-### Run Development Server
-```bash
-uv run python -m uvicorn main:app --reload
-```
-
-### Run Tests
-```bash
-uv run pytest
-```
-
-### Run Single Test
-```bash
-uv run pytest path/to/test_file.py::test_function_name -v
-```
+- **Entrypoint**: `main:app` (FastAPI)
+- **Config**: `app.core.config.settings` (pydantic-settings, reads `.env`)
+- **Logging**: `app.core.logging` — uses standard `logging` library, NOT structlog
+  ```python
+  from app.core.logging import setup_logging, get_logger
+  setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+  logger = get_logger(__name__)
+  ```
+- **Request ID**: Auto-injected via `RequestIDMiddleware`. Access via `request_id_ctx_var`:
+  ```python
+  from app.core.logging import request_id_ctx_var
+  request_id_ctx_var.set("abc-123")
+  ```
 
 ## Code Style Guidelines
 
@@ -107,17 +102,39 @@ TM-RAG/
 ├── pyproject.toml          # Project metadata & dependencies
 ├── uv.lock                 # Locked dependencies
 ├── .python-version         # Python version specification
+├── .env                    # Environment variables (gitignored)
 ├── app/                   # Application code
 │   ├── __init__.py
 │   ├── api/               # API route handlers
-│   │   └── routes.py
+│   │   ├── deps.py
+│   │   ├── middleware.py  # RequestIDMiddleware ✅
+│   │   └── v1/routes/
+│   │       ├── chat.py    # [needs implementation]
+│   │       └── health.py  # [needs implementation]
+│   ├── core/
+│   │   ├── config.py      # Settings (pydantic-settings) ✅
+│   │   ├── logging.py     # Structured logging (JSON/text) ✅
+│   │   └── exceptions.py
 │   ├── models/            # Pydantic request/response models
-│   │   └── schemas.py
-│   ├── services/          # Business logic & LangChain orchestration
-│   │   └── rag_service.py
-│   └── config.py          # Configuration settings
-└── tests/                 # Test files
-    └── test_rag_service.py
+│   │   ├── chat.py        # [needs implementation]
+│   │   └── common.py
+│   ├── pipelines/         # LangChain pipelines
+│   │   ├── prompts.py
+│   │   └── rag_pipeline.py
+│   ├── services/          # Business logic
+│   │   ├── rag_service.py     # [needs implementation]
+│   │   ├── llm_service.py
+│   │   └── retriever_service.py
+│   └── utils/
+│       └── text.py
+└── tests/
+    ├── conftest.py        # [needs implementation]
+    ├── unit/
+    │   ├── test_rag_service.py      # [needs implementation]
+    │   ├── test_llm_service.py       # [needs implementation]
+    │   └── test_retriever_service.py # [needs implementation]
+    └── integration/
+        └── test_chat_endpoint.py    # [needs implementation]
 ```
 
 ## API Conventions
