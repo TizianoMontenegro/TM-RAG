@@ -10,6 +10,7 @@ Structured logging configuration.
 
 from __future__ import annotations
 
+import json
 import logging
 import logging.config
 import sys
@@ -27,6 +28,37 @@ from typing import Any, override
 #   request_id_ctx_var.set("abc-123")
 # ---------------------------------------------------------------------------
 request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")
+
+
+# ---------------------------------------------------------------------------
+# LogRecord attributes to exclude from JSON payload
+# ---------------------------------------------------------------------------
+_LOG_RECORD_ATTRS: frozenset[str] = frozenset({
+    "args",
+    "asctime",
+    "created",
+    "exc_info",
+    "exc_text",
+    "filename",
+    "funcName",
+    "levelname",
+    "levelno",
+    "lineno",
+    "message",
+    "module",
+    "msecs",
+    "msg",
+    "name",
+    "pathname",
+    "process",
+    "processName",
+    "relativeCreated",
+    "request_id",
+    "stack_info",
+    "taskName",
+    "thread",
+    "threadName",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -66,8 +98,6 @@ class JSONFormatter(logging.Formatter):
 
     @override
     def format(self, record: logging.LogRecord) -> str:
-        import json
-
         record.message = record.getMessage()
 
         # ISO-8601 timestamp
@@ -86,13 +116,8 @@ class JSONFormatter(logging.Formatter):
             payload["exc_info"] = self.formatException(record.exc_info)
 
         # Attach any extra fields passed via logger.info("msg", extra={...})
-        standard_attrs = logging.LogRecord.__dict__.keys() | {
-            "message",
-            "asctime",
-            "request_id",
-        }
         for key, value in record.__dict__.items():
-            if key not in standard_attrs and not key.startswith("_"):
+            if key not in _LOG_RECORD_ATTRS and not key.startswith("_"):
                 payload[key] = value
 
         return json.dumps(payload, default=str)
