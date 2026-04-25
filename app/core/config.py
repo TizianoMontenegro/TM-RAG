@@ -1,3 +1,6 @@
+from typing import Literal
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,11 +32,11 @@ class Settings(BaseSettings):
     nvidia_llm_model: str = "meta/llama-3.1-70b-instruct"
     nvidia_embedding_model: str = "nvidia/nv-embedqa-e5-v5"
     nvidia_max_tokens: int = 1024
-    nvidia_temperature: float = 0.2
+    nvidia_temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
     # --- Logging ---
-    log_level: str = "INFO"
-    log_format: str = "json"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    log_format: Literal["json", "text"] = "text"
 
 
 settings = Settings()
