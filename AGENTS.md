@@ -13,20 +13,22 @@
 ```bash
 uv sync                                  # Install deps
 uv run ruff check .                      # Lint
-uv run ruff format .                     # Format
-uv run pytest                         # Test (all)
+uv run ruff format .                   # Format
+uv run pytest                          # Test (all)
 uv run pytest path -v                  # Test (single)
-uv run python -m uvicorn main:app --reload  # Dev server
+uv run python -m uvicorn main:app       # Dev server
 ```
+
+- Dev server: `reload=True` when `settings.debug=True`, otherwise `reload=False`
 
 ## Architecture
 
-- **Entrypoint**: `main:app` (FastAPI)
+- **Entrypoint**: `main:app` (FastAPI with lifespan handler)
 - **Config**: `app.core.config.settings` (pydantic-settings, reads `.env`)
 - **Logging**: `app.core.logging` — uses standard `logging` library, NOT structlog
+  - `setup_logging()` is called in the lifespan handler, not at import time
   ```python
-  from app.core.logging import setup_logging, get_logger
-  setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+  from app.core.logging import get_logger
   logger = get_logger(__name__)
   ```
 - **Request ID**: Auto-injected via `RequestIDMiddleware`. Access via `request_id_ctx_var`:
@@ -34,6 +36,14 @@ uv run python -m uvicorn main:app --reload  # Dev server
   from app.core.logging import request_id_ctx_var
   request_id_ctx_var.set("abc-123")
   ```
+
+## Config Validation
+
+Settings are validated at startup using Pydantic `Literal` and `Field` constraints:
+
+- `log_level`: `Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]` — invalid values cause startup failure
+- `log_format`: `Literal["json", "text"]` — invalid values cause startup failure
+- `nvidia_temperature`: `Field(default=0.2, ge=0.0, le=1.0)` — out-of-range values cause startup failure
 
 ## Code Style Guidelines
 
@@ -80,9 +90,24 @@ def process_query(query: str, context: list[str]) -> str:
 
 ### Error Handling
 - Use specific exception types (avoid bare `except:`)
-- Return proper HTTP error responses via FastAPI's `HTTPException`
+- Domain exceptions defined in `app.core.exceptions` are mapped to HTTP status codes in `main.py`
 - Log errors with appropriate severity levels
 - Handle NVIDIA API errors gracefully with fallback responses
+
+### HTTP Exception Mapping
+All domain exceptions inherit from `RAGServiceException` and are registered in `main.py`:
+
+```python
+EXCEPTION_STATUS_MAP = {
+    DocumentNotFoundException: 404,
+    LLMUnavailableException: 503,
+    RetrieverException: 502,
+    IngestException: 500,
+}
+```
+
+- HTTP status codes live in `main.py`, not in the domain layer
+- The domain layer (`app.core.exceptions`) is HTTP-agnostic
 
 ### Async Operations
 - Prefer `async/await` for I/O-bound operations
