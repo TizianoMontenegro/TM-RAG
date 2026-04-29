@@ -169,7 +169,7 @@ EXCEPTION_STATUS_MAP = {
 
 | Phase | Description                     | Status         |
 |-------|---------------------------------|----------------|
-| 0     | Project Foundation              | ⚠️ Mostly Done  |
+| 0     | Project Foundation              | ✅ Done        |
 | 1     | Core Infrastructure             | ✅ Done        |
 | 2     | API Layer                       | 🔲 In progress |
 | 3     | Data Layer (Repositories)       | 🔲 Pending     |
@@ -215,9 +215,9 @@ Template with all required environment variable keys, no secret values. Groups:
 
 Excludes `.env`, `__pycache__/`, `.venv/`, `*.pyc`, FAISS index files, and test artifacts.
 
-### 0.4 — Dependencies 🔲 Pending
+### 0.4 — Dependencies ✅ Done
 
-Run the following and verify `pyproject.toml` reflects all packages before proceeding to Phase 2.
+All required packages have been added via `uv add`. Verified `pyproject.toml` and `uv.lock` are updated.
 
 ```bash
 uv add fastapi uvicorn pydantic-settings
@@ -226,10 +226,10 @@ uv add pgvector psycopg2-binary sqlalchemy
 uv add faiss-cpu
 uv add httpx
 
-uv add --dev pytest pytest-asyncio httpx ruff
+uv add --dev pytest pytest-asyncio ruff
 ```
 
-Mark this step ✅ Done only after confirming `pyproject.toml` and `uv.lock` are updated.
+Note: `httpx` is included only in main dependencies (not duplicated in dev).
 
 ---
 
