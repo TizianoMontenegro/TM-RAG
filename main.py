@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
@@ -11,8 +12,10 @@ from app.core.exceptions import (
     RetrieverException,
     RAGServiceException,
 )
-from app.core.logging import setup_logging
+from app.core.logging import request_id_ctx_var, setup_logging
 from app.api.middleware import RequestIDMiddleware
+from app.api.v1.routes.health import router as health_router
+from app.api.v1.routes.chat import router as chat_router
 
 
 EXCEPTION_STATUS_MAP: dict[type[RAGServiceException], int] = {
@@ -35,14 +38,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(health_router)
+app.include_router(chat_router)
 
 
 @app.exception_handler(RAGServiceException)
-async def rag_exception_handler(request: Request, exc: RAGServiceException) -> JSONResponse:
+async def rag_exception_handler(
+    request: Request, exc: RAGServiceException
+) -> JSONResponse:
+    from app.models.common import ErrorResponse
+
     status_code = EXCEPTION_STATUS_MAP.get(type(exc), 500)
     return JSONResponse(
         status_code=status_code,
-        content={"message": exc.message},
+        content=ErrorResponse(
+            error=exc.message,
+            request_id=request_id_ctx_var.get(),
+        ).model_dump(),
     )
 
 
