@@ -33,32 +33,34 @@ request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")
 # ---------------------------------------------------------------------------
 # LogRecord attributes to exclude from JSON payload
 # ---------------------------------------------------------------------------
-_LOG_RECORD_ATTRS: frozenset[str] = frozenset({
-    "args",
-    "asctime",
-    "created",
-    "exc_info",
-    "exc_text",
-    "filename",
-    "funcName",
-    "levelname",
-    "levelno",
-    "lineno",
-    "message",
-    "module",
-    "msecs",
-    "msg",
-    "name",
-    "pathname",
-    "process",
-    "processName",
-    "relativeCreated",
-    "request_id",
-    "stack_info",
-    "taskName",
-    "thread",
-    "threadName",
-})
+_LOG_RECORD_ATTRS: frozenset[str] = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "message",
+        "module",
+        "msecs",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "request_id",
+        "stack_info",
+        "taskName",
+        "thread",
+        "threadName",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
