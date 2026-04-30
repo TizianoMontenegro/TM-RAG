@@ -171,7 +171,7 @@ EXCEPTION_STATUS_MAP = {
 |-------|---------------------------------|----------------|
 | 0     | Project Foundation              | ✅ Done        |
 | 1     | Core Infrastructure             | ✅ Done        |
-| 2     | API Layer                       | 🔲 In progress |
+| 2     | API Layer                       | ✅ Done        |
 | 3     | Data Layer (Repositories)       | 🔲 Pending     |
 | 4     | LangChain Pipelines             | 🔲 Pending     |
 | 5     | Services                        | 🔲 Pending     |
@@ -338,9 +338,9 @@ configuration, exceptions, and logging primitives only.
 
 ---
 
-## Phase 2 — API Layer 🔲 In progress
+## Phase 2 — API Layer ✅ Done
 
-### 2.1 — `app/models/common.py` 🔲 Pending
+### 2.1 — `app/models/common.py` ✅ Done
 
 **Pattern**: Pydantic v2 `BaseModel` for shared response shapes.
 
@@ -359,7 +359,7 @@ class ErrorResponse(BaseModel):
 
 `ErrorResponse` must never include `exception.detail` — that stays in logs only.
 
-### 2.2 — `app/models/chat.py` 🔲 Pending
+### 2.2 — `app/models/chat.py` ✅ Done
 
 **Pattern**: Pydantic v2 `BaseModel` with input validation.
 
@@ -387,7 +387,7 @@ class ChatResponse(BaseModel):
 - `query`: `min_length=1`, `max_length=2000` — reject empty strings and very long inputs upstream.
 - `user_id`: non-empty string.
 
-### 2.3 — `app/api/v1/routes/health.py` 🔲 Pending
+### 2.3 — `app/api/v1/routes/health.py` ✅ Done
 
 **Pattern**: Simple FastAPI route, no service dependency required.
 
@@ -401,7 +401,7 @@ GET /v1/health
 - Should remain fast and dependency-free — do not call the database or LLM here.
 - Include `APIRouter` with `prefix="/v1"` and `tags=["health"]`.
 
-### 2.4 — `app/api/v1/routes/chat.py` 🔲 Pending
+### 2.4 — `app/api/v1/routes/chat.py` ✅ Done
 
 **Pattern**: FastAPI route with injected `RAGService` via `Depends()`.
 
@@ -422,7 +422,7 @@ Body: ChatRequest
 - Log all exceptions at `ERROR` level with `logger.exception()` — this captures the full traceback
   in the structured log without exposing it to the client.
 
-### 2.5 — `app/api/deps.py` 🔲 Pending
+### 2.5 — `app/api/deps.py` ✅ Done
 
 **Pattern**: Single resolution point for all `Depends()` functions. No other file decides which
 concrete implementation is used.
@@ -461,7 +461,7 @@ def get_rag_service(
 `get_hot_repository()` and `get_cold_repository()` as stubs that raise `NotImplementedError`.
 Do not leave them silently returning `None`.
 
-### 2.6 — `main.py` 🔲 Pending
+### 2.6 — `main.py` ✅ Done
 
 **Pattern**: FastAPI application factory with lifespan handler.
 
