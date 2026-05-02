@@ -19,3 +19,14 @@ class VectorStoreRepository(ABC):
     async def delete(self, ids: list[str]) -> None:
         """Remove documents by ID."""
         ...
+
+    @abstractmethod
+    async def rerank(
+        self, candidates: list[Document], query_vector: list[float], top_k: int
+    ) -> list[Document]:
+        """Re-rank candidates using query vector.
+
+        For FAISS: builds a temporary index from candidates and searches within it.
+        For PgVector: raises RetrieverException (not supported).
+        """
+        ...
