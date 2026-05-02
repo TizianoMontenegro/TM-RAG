@@ -2,6 +2,8 @@ from fastapi import Depends
 
 from app.core.config import settings
 from app.repositories.base import VectorStoreRepository
+from app.repositories.faiss_repository import FAISSRepository
+from app.repositories.pgvector_repository import PgVectorRepository
 
 # ---------------------------------------------------------------------------
 # Settings
@@ -13,41 +15,44 @@ def get_settings() -> settings.__class__:
 
 
 # ---------------------------------------------------------------------------
-# Repository stubs (Phase 3 not yet implemented)
-# These return working objects that raise NotImplementedError if used.
+# Embedding model (shared by both repositories)
+# ---------------------------------------------------------------------------
+
+_embedding_model_cache = None
+
+
+def get_embedding_model():
+    global _embedding_model_cache
+    if _embedding_model_cache is None:
+        from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+
+        _embedding_model_cache = NVIDIAEmbeddings(
+            model=settings.nvidia_embedding_model,
+            api_key=settings.nvidia_api_key.get_secret_value(),
+            base_url=settings.nvidia_base_url,
+        )
+    return _embedding_model_cache
+
+
+# ---------------------------------------------------------------------------
+# Repositories
 # ---------------------------------------------------------------------------
 
 
-class _StubRepository(VectorStoreRepository):
-    """Stub repository that satisfies the interface without a backend."""
-
-    async def search(self, query_vector: list[float], top_k: int) -> list:
-        raise NotImplementedError(
-            "FAISSRepository/PgVectorRepository not yet implemented. See Phase 3."
-        )
-
-    async def upsert(self, documents: list) -> None:
-        raise NotImplementedError(
-            "FAISSRepository/PgVectorRepository not yet implemented. See Phase 3."
-        )
-
-    async def delete(self, ids: list[str]) -> None:
-        raise NotImplementedError(
-            "FAISSRepository/PgVectorRepository not yet implemented. See Phase 3."
-        )
+def get_hot_repository(
+    embedding_model=Depends(get_embedding_model),
+) -> VectorStoreRepository:
+    return FAISSRepository(embedding_model=embedding_model)
 
 
-def get_hot_repository() -> VectorStoreRepository:
-    return _StubRepository()
-
-
-def get_cold_repository() -> VectorStoreRepository:
-    return _StubRepository()
+def get_cold_repository(
+    embedding_model=Depends(get_embedding_model),
+) -> VectorStoreRepository:
+    return PgVectorRepository(embedding_model=embedding_model)
 
 
 # ---------------------------------------------------------------------------
 # Service stubs (Phase 5 not yet implemented)
-# These return working objects that raise NotImplementedError if used.
 # ---------------------------------------------------------------------------
 
 
