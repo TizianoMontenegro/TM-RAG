@@ -97,13 +97,18 @@ class FAISSRepository(VectorStoreRepository):
         await asyncio.to_thread(_upsert)
 
     async def delete(self, ids: list[str]) -> None:
+        # Note: FAISS delete marks documents as removed but does not shrink the index.
+        # For large deletions, rebuilding the index from remaining documents may be
+        # required for optimal performance. This is a known FAISS limitation.
         def _delete() -> None:
             try:
                 if self._vectorstore is None:
                     return
                 self._vectorstore.delete(ids=ids)
             except Exception as exc:
-                raise RetrieverException(detail=f"FAISS delete failed: {exc}") from exc
+                raise RetrieverException(
+                    detail=f"FAISS delete failed: {exc}"
+                ) from exc
 
         await asyncio.to_thread(_delete)
 
