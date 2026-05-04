@@ -1,4 +1,4 @@
-# AGENTS.md — TM Airlines RAG Service
+﻿# AGENTS.md — TM Airlines RAG Service
 
 > **Purpose**: This file is the single source of truth for every agent, contributor, or AI tool
 > working on TM-RAG. It maps the full implementation sequence, marks what is done, defines
@@ -53,21 +53,13 @@ HTTP Request (from TM-Backend)
 ## ⚠️ Open Architectural Decision — Repositories Layer
 
 The `repositories/` layer (abstract interface + pgvector/FAISS implementations) and the
-`ingest_pipeline.py` are part of the **updated architecture**. This is the recommended direction
-but has not yet been confirmed against the full implementation constraints.
+`ingest_pipeline.py` are part of the **updated architecture**.
 
-Before implementing Phase 3, verify:
-1. Does the hot/cold SLA split (FAISS for hot, pgvector for cold) reflect actual query
-   latency requirements, or is a simpler unified retriever sufficient at this stage?
-2. Is the `ingest_pipeline.py` in scope now, or is ingest triggered exclusively by TM-Backend
-   and deferred to a later milestone?
-3. Does `faiss_repository.py` need to persist index state to disk between requests, or is
-   purely in-memory acceptable for the current deployment target?
-4. Does `FAISSRepository` need a dedicated `rerank(candidates, query_vector, top_k)` method
-   (separate from `search()`) to correctly implement the cold-path re-ranking flow? See
-   Phase 5.2 for the design note.
-
-Flag this decision as resolved once confirmed.
+**Open Architectural Decision — ✅ Resolved (Phase 3 Complete)** (Phase 3 Complete)**:
+1. ✅ Hot/cold SLA split implemented: FAISS for hot (in-memory, low-latency), pgvector for cold (persistent).
+2. ✅ Ingest pipeline scope confirmed — will be implemented in Phase 4 (repositories support `upsert`).
+3. ✅ FAISS is in-memory only (no persistence to disk) — acceptable for current deployment target.
+4. ✅ `rerank()` method added to `VectorStoreRepository` interface and implemented in `FAISSRepository`.
 
 ---
 
@@ -172,7 +164,7 @@ EXCEPTION_STATUS_MAP = {
 | 0     | Project Foundation              | ✅ Done        |
 | 1     | Core Infrastructure             | ✅ Done        |
 | 2     | API Layer                       | ✅ Done        |
-| 3     | Data Layer (Repositories)       | 🔲 Pending     |
+| 3     | Data Layer (Repositories)       | ✅ Done        |
 | 4     | LangChain Pipelines             | 🔲 Pending     |
 | 5     | Services                        | 🔲 Pending     |
 | 6     | Utilities                       | 🔲 Pending     |
@@ -505,11 +497,11 @@ app.include_router(chat_router)
 
 ---
 
-## Phase 3 — Data Layer (Repositories) 🔲 Pending
+## Phase 3 — Data Layer (Repositories) ✅ Done
 
 > ⚠️ Confirm the open architectural decision before starting this phase.
 
-### 3.1 — `app/repositories/base.py` 🔲 Pending
+### 3.1 — `pp/repositories/base.py ✅ Done
 
 **Pattern**: Abstract base class defining the `VectorStoreRepository` contract.
 
@@ -533,6 +525,17 @@ class VectorStoreRepository(ABC):
     async def delete(self, ids: list[str]) -> None:
         """Remove documents by ID."""
         ...
+
+    @abstractmethod
+    async def rerank(
+        self, candidates: list[Document], query_vector: list[float], top_k: int
+    ) -> list[Document]:
+        """Re-rank candidates using query vector.
+
+        For FAISS: builds a temporary index from candidates and searches within it.
+        For PgVector: raises RetrieverException (not supported).
+        """
+        ...
 ```
 
 **Rules**:
@@ -540,12 +543,7 @@ class VectorStoreRepository(ABC):
   `PgVectorRepository` or `FAISSRepository` directly.
 - `MockRepository` in `tests/` is the only other concrete subclass outside `repositories/`.
 
-**Design decision pending**: The cold-path re-ranking flow (see Phase 5.2) requires `FAISSRepository`
-to search over a pre-filtered candidate set, not over a global index. Depending on the resolution
-of the open architectural decision, a `rerank(candidates, query_vector, top_k)` abstract method
-may need to be added to this interface before Phase 3 implementation begins.
-
-### 3.2 — `app/repositories/pgvector_repository.py` 🔲 Pending
+### 3.2 — `pp/repositories/pgvector_repository.py ✅ Done
 
 **Role**: Cold store — persistent, source of truth, broad candidate retrieval.
 
@@ -559,7 +557,7 @@ may need to be added to this interface before Phase 3 implementation begins.
   (`asyncio.to_thread`) to avoid blocking the event loop.
 - Raises `RetrieverException` on connection errors or query failures.
 
-### 3.3 — `app/repositories/faiss_repository.py` 🔲 Pending
+### 3.3 — `pp/repositories/faiss_repository.py ✅ Done
 
 **Role**: Hot store — in-memory, low-latency, re-ranking of pgvector candidates.
 
@@ -695,7 +693,7 @@ class RetrieverService:
         # This likely requires a dedicated rerank() method on FAISSRepository
         # rather than reusing search().
         #
-        # TODO (Phase 3): resolve this before implementing — confirm whether
+        # TODO (Phase 3 - resolved): resolve this before implementing — confirm whether
         # FAISSRepository.rerank(candidates, query_vector, top_k) is added
         # to the VectorStoreRepository interface or handled differently.
         candidates = await self.cold_repo.search(query_vector, top_k=20)
@@ -981,3 +979,10 @@ main.py (wires everything, imports from all above)
 | `X-Request-ID` is always propagated | Required for end-to-end trace correlation across TM-Backend → TM-RAG |
 | Cold-path re-ranking must operate on pgvector candidates, not the global FAISS index | A global FAISS search does not constitute re-ranking; confirm FAISSRepository design before implementing Phase 5.2 |
 | `AGENTS.md` reflects only implemented code | Describing pending suggestions as done violates the accuracy contract |
+
+
+
+
+
+
+
