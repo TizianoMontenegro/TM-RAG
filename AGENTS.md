@@ -17,7 +17,9 @@ backend (TM-Backend). It receives a natural-language query, retrieves relevant d
 vector store, and returns a grounded response generated via NVIDIA AI Endpoints.
 
 **Runtime contract with TM-Backend**:
-- TM-RAG exposes a REST API. TM-Backend calls it; TM-RAG never calls TM-Backend.
+- TM-RAG exposes a REST API consumed by TM-Backend.
+- The **Agentic pipeline** (user-data queries) makes outbound HTTP calls to TM-Backend's internal API to fetch booking and user data. No other pipeline makes outbound calls to TM-Backend.
+- TM-RAG never accesses the booking database directly. All user-data retrieval goes through TM-Backend's API, never via a direct DB connection.
 - TM-RAG owns its own PostgreSQL + pgvector instance. It has zero access to the booking database.
 - Read-only data (flight schedules, policies) is synced asynchronously from TM-Backend to TM-RAG's store.
 
@@ -28,18 +30,26 @@ vector store, and returns a grounded response generated via NVIDIA AI Endpoints.
 ```
 HTTP Request (from TM-Backend)
         ↓
-┌──────────────────┐
-│   api/           │  Presentation layer  — routing, HTTP validation, middleware
-├──────────────────┤
-│   services/      │  Business layer      — orchestration, decisions
-├──────────────────┤
-│   pipelines/     │  Chain layer         — LangChain RAG and ingest chains
-├──────────────────┤
-│   repositories/  │  Data layer          — abstract vector store interface + implementations
-├──────────────────┤
-│   pgvector       │  Persistent storage  — source of truth for vectors
-│   FAISS          │  In-memory compute   — re-ranking, hot queries
-└──────────────────┘
+┌──────────────────────┐
+│   api/               │  Presentation layer  — routing, HTTP validation, middleware
+├──────────────────────┤
+│   services/          │  Business layer      — intent classification, routing, orchestration
+│                      │
+│   intent_classifier  │  Classifies query as "user_data" or "policy"
+│   rag_service        │  Router — dispatches to the correct pipeline
+├──────────────────────┤
+│   pipelines/         │  Chain layer         — LangChain chains and agent executor
+│                      │
+│   crag_pipeline      │  CRAG chain          — policy/legal queries (self-evaluation + fallback)
+│   agentic_pipeline   │  Tool-calling agent  — user-data queries (calls TM-Backend API)
+│   ingest_pipeline    │  Ingest chain        — document → embedding → pgvector
+├──────────────────────┤
+│   repositories/      │  Data layer          — abstract vector store interface + implementations
+├──────────────────────┤
+│   pgvector           │  Persistent storage  — source of truth for vectors (CRAG pipeline)
+│   FAISS              │  In-memory compute   — re-ranking, hot queries (CRAG pipeline)
+│   TM-Backend API     │  External data       — bookings, user data (Agentic pipeline only)
+└──────────────────────┘
 ```
 
 **Key patterns**:
@@ -47,6 +57,8 @@ HTTP Request (from TM-Backend)
 - **Repository Pattern** — `repositories/base.py` defines the abstract `VectorStoreRepository` interface. Services depend on the interface, never on concrete implementations.
 - **Dependency Injection** — `api/deps.py` is the single resolution point for all concrete implementations. No other file decides which repository is used.
 - **Chain of Responsibility** — LangChain pipelines chain steps: retrieval → prompt → LLM → output parser.
+- **Dual-Pipeline Strategy** — Two independent pipelines with distinct responsibilities: Agentic RAG for user-data queries (dynamic, tool-based, calls TM-Backend API); CRAG for policy/legal queries (static document corpus, LLM self-evaluation step, conditional fallback on low-confidence retrieval).
+- **Intent Router** — `rag_service.py` is the single entry point for all queries. It calls `IntentClassifier` to classify each query as `"user_data"` or `"policy"` and dispatches to the appropriate pipeline. Route handlers never decide which pipeline to use.
 
 ---
 
@@ -579,45 +591,150 @@ class VectorStoreRepository(ABC):
 
 ## Phase 4 — LangChain Pipelines 🔲 Pending
 
+### Phase 4 Prerequisites — Additive changes to already-implemented files
+
+> Run these steps before starting any Phase 4 implementation. They are purely additive — they do not modify existing behavior in any Done phase.
+
+#### 4.0.1 — Install new dependency
+
+```bash
+uv add langgraph
+```
+
+#### 4.0.2 — Add new exceptions to `app/core/exceptions.py`
+
+Add the following two exception classes to the existing hierarchy in `exceptions.py`. Do not modify any existing class.
+
+```python
+class IntentClassificationException(RAGServiceException):
+    """Raised when the intent classifier fails to determine query type."""
+
+class AgentException(RAGServiceException):
+    """Raised when the agentic tool-calling pipeline fails (tool error or max iterations exceeded)."""
+```
+
+Also add their HTTP status mappings to the `EXCEPTION_STATUS_MAP` in `main.py`:
+
+```python
+IntentClassificationException: 500,
+AgentException: 502,
+```
+
+#### 4.0.3 — Add `BACKEND_API_URL` to `.env.example` and `config.py`
+
+In `.env.example`, add under the FastAPI group:
+```
+BACKEND_API_URL=http://tm-backend:8000
+```
+
+In `app/core/config.py`, add the field to the `Settings` class:
+```python
+backend_api_url: str  # Internal TM-Backend API base URL — required by Agentic pipeline
+```
+
+This field has no default — the app must fail at startup if it is missing when the Agentic pipeline is active.
+
+#### 4.0.4 — Add new stubs to the directory
+
+Create the following empty stub files (with module docstring only, no implementation):
+- `app/pipelines/crag_pipeline.py`
+- `app/pipelines/agentic_pipeline.py`
+- `app/services/intent_classifier.py`
+
+#### 4.0.5 — Update `api/deps.py` to add `IntentClassifier` resolution
+
+Add the following two functions to `deps.py`. Do not modify existing functions.
+
+```python
+def get_intent_classifier(
+    llm: LLMService = Depends(get_llm_service),
+) -> IntentClassifier:
+    return IntentClassifier(llm=llm)
+```
+
+Update the existing `get_rag_service` signature to inject `intent_classifier`:
+
+```python
+def get_rag_service(
+    retriever: RetrieverService = Depends(get_retriever_service),
+    llm: LLMService = Depends(get_llm_service),
+    intent_classifier: IntentClassifier = Depends(get_intent_classifier),
+) -> RAGService:
+    return RAGService(retriever=retriever, llm=llm, intent_classifier=intent_classifier)
+```
+
 ### 4.1 — `app/pipelines/prompts.py` 🔲 Pending
 
-**Pattern**: Centralized LangChain `ChatPromptTemplate` definitions. No prompts anywhere else.
+**Pattern**: Centralized LangChain `ChatPromptTemplate` definitions. No prompts anywhere else in the codebase.
 
 **Templates to define**:
 
 ```python
-RAG_SYSTEM_PROMPT = """You are a helpful assistant for TM Airlines customers.
+# --- CRAG pipeline prompts ---
+
+CRAG_SYSTEM_PROMPT = """You are a helpful assistant for TM Airlines customers.
 Answer only based on the provided context. If the context does not contain
 enough information, say so clearly. Do not invent information."""
 
-rag_prompt = ChatPromptTemplate.from_messages([
-    ("system", RAG_SYSTEM_PROMPT),
+crag_prompt = ChatPromptTemplate.from_messages([
+    ("system", CRAG_SYSTEM_PROMPT),
     ("human", "Context:\n{context}\n\nQuestion: {question}"),
+])
+
+CRAG_RELEVANCE_GRADER_PROMPT = """You are a relevance grader.
+Given the following retrieved document and user question, respond ONLY with JSON:
+{"score": "relevant"} or {"score": "not_relevant"}.
+
+Document: {document}
+Question: {question}"""
+
+crag_relevance_grader_prompt = ChatPromptTemplate.from_messages([
+    ("system", CRAG_RELEVANCE_GRADER_PROMPT),
+])
+
+# --- Agentic pipeline prompts ---
+
+AGENTIC_SYSTEM_PROMPT = """You are a helpful assistant for TM Airlines customers.
+You have access to tools that retrieve booking information, user data, and flight status.
+Always use the available tools before answering. Do not invent information.
+If a tool call fails, inform the user that the information is temporarily unavailable."""
+
+agentic_prompt = ChatPromptTemplate.from_messages([
+    ("system", AGENTIC_SYSTEM_PROMPT),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
 ])
 ```
 
 **Rules**:
-- `{context}` and `{question}` are the only template variables.
+- `crag_prompt`: only template variables are `{context}` and `{question}`.
+- `crag_relevance_grader_prompt`: only template variables are `{document}` and `{question}`. Output is parsed as JSON — use `JsonOutputParser`.
+- `agentic_prompt`: only template variables are `{input}` and `{agent_scratchpad}`. The scratchpad is populated automatically by the LangGraph agent executor.
 - Keep prompt tone airline-appropriate: professional, concise, factual.
 - Do not include instructions that could expose internal system details.
 
-### 4.2 — `app/pipelines/rag_pipeline.py` 🔲 Pending
+### 4.2 — `app/pipelines/crag_pipeline.py` 🔲 Pending
 
-**Pattern**: LangChain LCEL (LangChain Expression Language) chain.
+**Pattern**: Corrective RAG (CRAG) — retrieval with LLM self-evaluation and conditional fallback before generation.
+
+**When used**: All queries classified as `"policy"` by `IntentClassifier` — baggage rules, fare conditions, visa information, terms and conditions, legal disclosures.
 
 **Chain structure**:
 ```
-retriever_runnable | format_docs | rag_prompt | llm | StrOutputParser()
+retrieve_docs → grade_relevance → branch:
+    [any relevant]     → crag_prompt | llm | StrOutputParser
+    [none relevant]    → widen_search → grade_relevance (once) → crag_prompt | llm | StrOutputParser
+                                                               → DocumentNotFoundException (if still none)
 ```
 
 **Implementation notes**:
-- `retriever_runnable` wraps `RetrieverService.retrieve()` as a LangChain `Runnable`.
-- `format_docs` is a pure function: `lambda docs: "\n\n".join(d.page_content for d in docs)`.
-- `llm` is the `ChatNVIDIA` instance from `LLMService`.
-- The chain is built in a factory function, not at module import time, so that
-  `LLMService` and `RetrieverService` can be injected.
-- Raises `LLMUnavailableException` or `RetrieverException` on failure — do not swallow
-  LangChain exceptions without wrapping them.
+- `retrieve_docs` calls `RetrieverService.retrieve(query_vector, hot=False)` — always cold path for policy documents.
+- `grade_relevance` sends each retrieved document to `crag_relevance_grader_prompt | llm | JsonOutputParser` and collects scores.
+- If **any** document scores `"relevant"`: proceed to generation using only the relevant subset.
+- If **all** documents score `"not_relevant"`: widen search by calling `RetrieverService.retrieve(query_vector, hot=False, top_k=40)` and re-grade once. If still none relevant: raise `DocumentNotFoundException`.
+- Generation step: `crag_prompt | llm | StrOutputParser()`.
+- Built in a factory function `build_crag_chain(retriever_service, llm_service)` — not at module import time.
+- Raises `LLMUnavailableException`, `RetrieverException`, or `DocumentNotFoundException` on failure — never swallow LangChain exceptions without wrapping them.
 
 ### 4.3 — `app/pipelines/ingest_pipeline.py` 🔲 Pending
 
@@ -636,6 +753,38 @@ retriever_runnable | format_docs | rag_prompt | llm | StrOutputParser()
 async def run_ingest(documents: list[Document], repository: VectorStoreRepository) -> None:
     ...
 ```
+
+### 4.4 — `app/pipelines/agentic_pipeline.py` 🔲 Pending
+
+**Pattern**: LangGraph `create_react_agent` executor with LangChain `@tool`-decorated functions that call TM-Backend's internal API.
+
+**When used**: All queries classified as `"user_data"` by `IntentClassifier` — booking status, itinerary details, seat assignments, user preferences, check-in eligibility.
+
+**Tools to define**:
+
+```python
+@tool
+async def get_booking(user_id: str, booking_id: str) -> dict:
+    """Retrieve booking details for a given user and booking ID from TM-Backend."""
+    ...
+
+@tool
+async def get_user_profile(user_id: str) -> dict:
+    """Retrieve user profile and preferences from TM-Backend."""
+    ...
+
+@tool
+async def get_flight_status(flight_number: str) -> dict:
+    """Retrieve real-time flight status from TM-Backend."""
+    ...
+```
+
+**Implementation notes**:
+- All tool HTTP calls use `httpx.AsyncClient` with base URL from `settings.backend_api_url`. Never hardcode URLs.
+- Any `httpx` error inside a tool must be caught and re-raised as `AgentException` with a user-safe `message` and the original exception as `detail`.
+- Agent executor: `langgraph.prebuilt.create_react_agent(llm, tools, prompt=agentic_prompt)`.
+- Max iterations: 5. If the agent exceeds this, raise `AgentException`.
+- Built in a factory function `build_agentic_pipeline(llm_service, settings)` — not at module import time.
 
 ---
 
@@ -709,9 +858,11 @@ class RetrieverService:
 - Raises `RetrieverException` if either repository raises.
 - Raises `DocumentNotFoundException` if the final result list is empty.
 
+> **Scope note**: `RetrieverService` is used exclusively by the CRAG pipeline. The Agentic pipeline does not use the vector store — it fetches all data via TM-Backend API tools.
+
 ### 5.3 — `app/services/rag_service.py` 🔲 Pending
 
-**Pattern**: Main orchestrator — decides retrieval strategy, runs the pipeline, returns a response.
+**Pattern**: Single entry point and router — classifies query intent, dispatches to the correct pipeline, returns a unified `ChatResponse`.
 
 ```python
 class RAGService:
@@ -719,22 +870,73 @@ class RAGService:
         self,
         retriever: RetrieverService,
         llm: LLMService,
+        intent_classifier: IntentClassifier,
     ) -> None:
         self.retriever = retriever
         self.llm = llm
+        self.intent_classifier = intent_classifier
 
     async def answer(self, request: ChatRequest) -> ChatResponse:
+        query = clean_query(request.query)
+        try:
+            intent = await self.intent_classifier.classify(query)
+        except IntentClassificationException:
+            logger.warning("Intent classification failed — defaulting to policy pipeline")
+            intent = "policy"
+
+        if intent == "user_data":
+            return await self._run_agentic_pipeline(request, query)
+        return await self._run_crag_pipeline(request, query)
+
+    async def _run_crag_pipeline(self, request: ChatRequest, query: str) -> ChatResponse:
+        """Embed query, run CRAG chain, return ChatResponse."""
+        ...
+
+    async def _run_agentic_pipeline(self, request: ChatRequest, query: str) -> ChatResponse:
+        """Run agentic tool-calling pipeline, return ChatResponse."""
         ...
 ```
 
 **Responsibilities**:
-1. Classify the query to decide `hot=True` or `hot=False` (initially: always `hot=False`).
-2. Embed the query using `NVIDIAEmbeddings`.
-3. Call `self.retriever.retrieve(query_vector, hot=...)`.
-4. Build and invoke the RAG chain from `rag_pipeline.py`.
+1. Call `clean_query()` from `utils/text.py` before any processing.
+2. Call `IntentClassifier.classify(query)` → `Literal["user_data", "policy"]`.
+3. On `IntentClassificationException`: log a warning and default to `"policy"` — never hard-fail the request at this step.
+4. Dispatch to the appropriate pipeline factory.
 5. Return a `ChatResponse` with `response`, `conversation_id`, and optional `sources`.
 
-**Error propagation**: Do not catch exceptions here — let them bubble to the route handler.
+**Error propagation**: Do not catch pipeline exceptions here — let them bubble to the route handler.
+
+### 5.4 — `app/services/intent_classifier.py` 🔲 Pending
+
+**Pattern**: LLM-based binary intent classifier with a fast, low-temperature prompt.
+
+```python
+from typing import Literal
+
+IntentType = Literal["user_data", "policy"]
+
+class IntentClassifier:
+    def __init__(self, llm: LLMService) -> None:
+        self._llm = llm.get_client()
+
+    async def classify(self, query: str) -> IntentType:
+        """Classify query as 'user_data' or 'policy'.
+
+        Returns:
+            'user_data' — bookings, reservations, personal data, flight status.
+            'policy'    — rules, fares, baggage allowances, legal terms, general information.
+
+        Raises:
+            IntentClassificationException: If the LLM response cannot be parsed or is not a valid intent.
+        """
+        ...
+```
+
+**Implementation notes**:
+- Use temperature `0.0` for this call — override at call time, do not change `settings.nvidia_temperature`.
+- Expected LLM output: JSON `{"intent": "user_data"}` or `{"intent": "policy"}`. Parse with `JsonOutputParser`.
+- If parsing fails or the value is not one of the two valid intents, raise `IntentClassificationException`.
+- Keep the classification prompt short — this runs on every request before the main pipeline.
 
 ---
 
@@ -801,6 +1003,9 @@ class MockRepository(VectorStoreRepository):
 - `test_answer_returns_chat_response` — mock retriever + mock LLM, assert shape of `ChatResponse`.
 - `test_answer_propagates_retriever_exception` — mock retriever raises `RetrieverException`, assert it bubbles.
 - `test_answer_propagates_llm_exception` — mock LLM raises `LLMUnavailableException`, assert it bubbles.
+- `test_answer_routes_to_crag_on_policy_intent` — mock `IntentClassifier` returning `"policy"`, assert `_run_crag_pipeline` is called and `_run_agentic_pipeline` is not.
+- `test_answer_routes_to_agentic_on_user_data_intent` — mock `IntentClassifier` returning `"user_data"`, assert `_run_agentic_pipeline` is called and `_run_crag_pipeline` is not.
+- `test_answer_defaults_to_policy_on_classification_failure` — mock `IntentClassifier` raising `IntentClassificationException`, assert `_run_crag_pipeline` is called and a warning is logged.
 
 #### `tests/unit/test_retriever_service.py`
 
@@ -814,6 +1019,13 @@ class MockRepository(VectorStoreRepository):
 - `test_get_client_returns_chat_nvidia` — assert `get_client()` returns a `ChatNVIDIA` instance.
 - `test_llm_unavailable_exception_on_api_error` — mock `ChatNVIDIA` to raise `httpx.ConnectError`,
   assert `LLMUnavailableException` is raised.
+
+#### `tests/unit/test_intent_classifier.py`
+
+- `test_classify_returns_user_data` — mock LLM returning `{"intent": "user_data"}`, assert result is `"user_data"`.
+- `test_classify_returns_policy` — mock LLM returning `{"intent": "policy"}`, assert result is `"policy"`.
+- `test_classify_raises_on_invalid_response` — mock LLM returning unparseable JSON, assert `IntentClassificationException` is raised.
+- `test_classify_raises_on_unknown_intent_value` — mock LLM returning `{"intent": "unknown"}`, assert `IntentClassificationException` is raised.
 
 ### 7.3 — Integration tests 🔲 Pending
 
@@ -955,9 +1167,11 @@ utils/text.py ──────────────────────
 pipelines/prompts.py ──────────────────────────────┤
 services/llm_service.py ───────────────────────────┤
 services/retriever_service.py ─────────────────────┤ (depends on base.py only)
-pipelines/rag_pipeline.py ─────────────────────────┤
+services/intent_classifier.py ─────────────────────┤ (depends on llm_service only)
+pipelines/crag_pipeline.py ────────────────────────┤ (depends on retriever_service + llm_service)
+pipelines/agentic_pipeline.py ─────────────────────┤ (depends on llm_service + TM-Backend API via httpx)
 pipelines/ingest_pipeline.py ──────────────────────┤
-services/rag_service.py ───────────────────────────┘
+services/rag_service.py ───────────────────────────┘ (depends on retriever, llm, intent_classifier)
                                                     ↓
 api/deps.py ────────────────────────────────────────┐
 api/v1/routes/health.py ────────────────────────────┤
@@ -979,6 +1193,8 @@ main.py (wires everything, imports from all above)
 | `X-Request-ID` is always propagated | Required for end-to-end trace correlation across TM-Backend → TM-RAG |
 | Cold-path re-ranking must operate on pgvector candidates, not the global FAISS index | A global FAISS search does not constitute re-ranking; confirm FAISSRepository design before implementing Phase 5.2 |
 | `AGENTS.md` reflects only implemented code | Describing pending suggestions as done violates the accuracy contract |
+| The Agentic pipeline is the only component permitted to make outbound HTTP calls to TM-Backend | All other pipelines are document-retrieval only — cross-pipeline HTTP calls break the separation contract |
+| `IntentClassifier` failure must default to the `"policy"` pipeline, never hard-fail the request | The CRAG pipeline is safer — it is document-grounded and cannot expose user data |
 
 
 
