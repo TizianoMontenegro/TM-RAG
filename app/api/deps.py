@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.repositories.base import VectorStoreRepository
 from app.repositories.faiss_repository import FAISSRepository
 from app.repositories.pgvector_repository import PgVectorRepository
+from app.services.intent_classifier import IntentClassifier
 
 # ---------------------------------------------------------------------------
 # Settings
@@ -82,9 +83,10 @@ class _StubLLMService:
 class _StubRAGService:
     """Stub RAG service — placeholder until Phase 5."""
 
-    def __init__(self, retriever, llm):
+    def __init__(self, retriever, llm, intent_classifier):
         self.retriever = retriever
         self.llm = llm
+        self.intent_classifier = intent_classifier
 
     async def answer(self, request) -> dict:
         raise NotImplementedError("RAGService not yet implemented. See Phase 5.")
@@ -103,8 +105,17 @@ def get_llm_service(
     return _StubLLMService(settings=settings)
 
 
+def get_intent_classifier(
+    llm=Depends(get_llm_service),
+) -> IntentClassifier:
+    return IntentClassifier(llm=llm)
+
+
 def get_rag_service(
     retriever=Depends(get_retriever_service),
     llm=Depends(get_llm_service),
+    intent_classifier=Depends(get_intent_classifier),
 ) -> _StubRAGService:
-    return _StubRAGService(retriever=retriever, llm=llm)
+    return _StubRAGService(
+        retriever=retriever, llm=llm, intent_classifier=intent_classifier
+    )
