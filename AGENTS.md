@@ -595,13 +595,13 @@ class VectorStoreRepository(ABC):
 
 > Run these steps before starting any Phase 4 implementation. They are purely additive — they do not modify existing behavior in any Done phase.
 
-#### 4.0.1 — Install new dependency
+#### 4.0.1 — Install new dependency ✅ Done
 
 ```bash
 uv add langgraph
 ```
 
-#### 4.0.2 — Add new exceptions to `app/core/exceptions.py`
+#### 4.0.2 — Add new exceptions to `app/core/exceptions.py` ✅ Done
 
 Add the following two exception classes to the existing hierarchy in `exceptions.py`. Do not modify any existing class.
 
@@ -620,7 +620,7 @@ IntentClassificationException: 500,
 AgentException: 502,
 ```
 
-#### 4.0.3 — Add `BACKEND_API_URL` to `.env.example` and `config.py`
+#### 4.0.3 — Add `BACKEND_API_URL` to `.env.example` and `config.py` ✅ Done
 
 In `.env.example`, add under the FastAPI group:
 ```
@@ -634,14 +634,14 @@ backend_api_url: str  # Internal TM-Backend API base URL — required by Agentic
 
 This field has no default — the app must fail at startup if it is missing when the Agentic pipeline is active.
 
-#### 4.0.4 — Add new stubs to the directory
+#### 4.0.4 — Add new stubs to the directory ✅ Done
 
 Create the following empty stub files (with module docstring only, no implementation):
 - `app/pipelines/crag_pipeline.py`
 - `app/pipelines/agentic_pipeline.py`
 - `app/services/intent_classifier.py`
 
-#### 4.0.5 — Update `api/deps.py` to add `IntentClassifier` resolution
+#### 4.0.5 — Update `api/deps.py` to add `IntentClassifier` resolution ✅ Done
 
 Add the following two functions to `deps.py`. Do not modify existing functions.
 
