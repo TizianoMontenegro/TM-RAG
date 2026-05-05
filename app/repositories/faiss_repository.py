@@ -106,9 +106,7 @@ class FAISSRepository(VectorStoreRepository):
                     return
                 self._vectorstore.delete(ids=ids)
             except Exception as exc:
-                raise RetrieverException(
-                    detail=f"FAISS delete failed: {exc}"
-                ) from exc
+                raise RetrieverException(detail=f"FAISS delete failed: {exc}") from exc
 
         await asyncio.to_thread(_delete)
 
