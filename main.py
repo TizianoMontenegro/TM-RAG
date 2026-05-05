@@ -6,8 +6,10 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.exceptions import (
+    AgentException,
     DocumentNotFoundException,
     IngestException,
+    IntentClassificationException,
     LLMUnavailableException,
     RetrieverException,
     RAGServiceException,
@@ -23,6 +25,8 @@ EXCEPTION_STATUS_MAP: dict[type[RAGServiceException], int] = {
     LLMUnavailableException: 503,
     RetrieverException: 502,
     IngestException: 500,
+    IntentClassificationException: 500,
+    AgentException: 502,
 }
 
 
