@@ -52,3 +52,25 @@ class IngestException(RAGServiceException):
         detail: str | None = None,
     ) -> None:
         super().__init__(message=message, detail=detail)
+
+
+class IntentClassificationException(RAGServiceException):
+    """Raised when the intent classifier fails to determine query type."""
+
+    def __init__(
+        self,
+        message: str = "Failed to classify query intent.",
+        detail: str | None = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail)
+
+
+class AgentException(RAGServiceException):
+    """Raised when the agentic tool-calling pipeline fails (tool error or max iterations exceeded)."""
+
+    def __init__(
+        self,
+        message: str = "Agent pipeline failed.",
+        detail: str | None = None,
+    ) -> None:
+        super().__init__(message=message, detail=detail)
