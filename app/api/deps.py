@@ -5,6 +5,9 @@ from app.repositories.base import VectorStoreRepository
 from app.repositories.faiss_repository import FAISSRepository
 from app.repositories.pgvector_repository import PgVectorRepository
 from app.services.intent_classifier import IntentClassifier
+from app.services.llm_service import LLMService
+from app.services.retriever_service import RetrieverService
+from app.services.rag_service import RAGService
 
 # ---------------------------------------------------------------------------
 # Settings
@@ -53,69 +56,32 @@ def get_cold_repository(
 
 
 # ---------------------------------------------------------------------------
-# Service stubs (Phase 5 not yet implemented)
+# Services
 # ---------------------------------------------------------------------------
-
-
-class _StubRetrieverService:
-    """Stub retriever service."""
-
-    def __init__(
-        self, hot_repo: VectorStoreRepository, cold_repo: VectorStoreRepository
-    ):
-        self.hot_repo = hot_repo
-        self.cold_repo = cold_repo
-
-    async def retrieve(self, query_vector: list[float], hot: bool = False) -> list:
-        raise NotImplementedError("RetrieverService not yet implemented. See Phase 5.")
-
-
-class _StubLLMService:
-    """Stub LLM service."""
-
-    def __init__(self, settings):
-        self.settings = settings
-
-    def get_client(self):
-        raise NotImplementedError("LLMService not yet implemented. See Phase 5.")
-
-
-class _StubRAGService:
-    """Stub RAG service — placeholder until Phase 5."""
-
-    def __init__(self, retriever, llm, intent_classifier):
-        self.retriever = retriever
-        self.llm = llm
-        self.intent_classifier = intent_classifier
-
-    async def answer(self, request) -> dict:
-        raise NotImplementedError("RAGService not yet implemented. See Phase 5.")
 
 
 def get_retriever_service(
     hot_repo: VectorStoreRepository = Depends(get_hot_repository),
     cold_repo: VectorStoreRepository = Depends(get_cold_repository),
-) -> _StubRetrieverService:
-    return _StubRetrieverService(hot_repo=hot_repo, cold_repo=cold_repo)
+) -> RetrieverService:
+    return RetrieverService(hot_repo=hot_repo, cold_repo=cold_repo)
 
 
 def get_llm_service(
     settings: settings.__class__ = Depends(get_settings),
-) -> _StubLLMService:
-    return _StubLLMService(settings=settings)
+) -> LLMService:
+    return LLMService(settings=settings)
 
 
 def get_intent_classifier(
-    llm=Depends(get_llm_service),
+    llm: LLMService = Depends(get_llm_service),
 ) -> IntentClassifier:
     return IntentClassifier(llm=llm)
 
 
 def get_rag_service(
-    retriever=Depends(get_retriever_service),
-    llm=Depends(get_llm_service),
-    intent_classifier=Depends(get_intent_classifier),
-) -> _StubRAGService:
-    return _StubRAGService(
-        retriever=retriever, llm=llm, intent_classifier=intent_classifier
-    )
+    retriever: RetrieverService = Depends(get_retriever_service),
+    llm: LLMService = Depends(get_llm_service),
+    intent_classifier: IntentClassifier = Depends(get_intent_classifier),
+) -> RAGService:
+    return RAGService(retriever=retriever, llm=llm, intent_classifier=intent_classifier)
