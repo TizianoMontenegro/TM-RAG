@@ -177,8 +177,8 @@ EXCEPTION_STATUS_MAP = {
 | 1     | Core Infrastructure             | ✅ Done        |
 | 2     | API Layer                       | ✅ Done        |
 | 3     | Data Layer (Repositories)       | ✅ Done        |
-| 4     | LangChain Pipelines             | 🔲 Pending     |
-| 5     | Services                        | 🔲 Pending     |
+| 4     | LangChain Pipelines             | ✅ Done        |
+| 5     | Services                        | ✅ Done        |
 | 6     | Utilities                       | 🔲 Pending     |
 | 7     | Testing                         | 🔲 Pending     |
 | 8     | Linting, Formatting & CI Checks | 🔲 Pending     |
@@ -589,7 +589,7 @@ class VectorStoreRepository(ABC):
 
 ---
 
-## Phase 4 — LangChain Pipelines 🔲 Pending
+## Phase 4 — LangChain Pipelines ✅ Done
 
 ### Phase 4 Prerequisites — Additive changes to already-implemented files
 
@@ -663,7 +663,7 @@ def get_rag_service(
     return RAGService(retriever=retriever, llm=llm, intent_classifier=intent_classifier)
 ```
 
-### 4.1 — `app/pipelines/prompts.py` 🔲 Pending
+### 4.1 — `app/pipelines/prompts.py` ✅ Done
 
 **Pattern**: Centralized LangChain `ChatPromptTemplate` definitions. No prompts anywhere else in the codebase.
 
@@ -713,7 +713,12 @@ agentic_prompt = ChatPromptTemplate.from_messages([
 - Keep prompt tone airline-appropriate: professional, concise, factual.
 - Do not include instructions that could expose internal system details.
 
-### 4.2 — `app/pipelines/crag_pipeline.py` 🔲 Pending
+**Implementation notes**:
+- All prompts defined in `app/pipelines/prompts.py` as specified.
+- `crag_relevance_grader_prompt` uses `JsonOutputParser` for structured output.
+- `agentic_prompt` uses `agent_scratchpad` placeholder for LangGraph agent executor.
+
+### 4.2 — `app/pipelines/crag_pipeline.py` ✅ Done
 
 **Pattern**: Corrective RAG (CRAG) — retrieval with LLM self-evaluation and conditional fallback before generation.
 
@@ -736,7 +741,13 @@ retrieve_docs → grade_relevance → branch:
 - Built in a factory function `build_crag_chain(retriever_service, llm_service)` — not at module import time.
 - Raises `LLMUnavailableException`, `RetrieverException`, or `DocumentNotFoundException` on failure — never swallow LangChain exceptions without wrapping them.
 
-### 4.3 — `app/pipelines/ingest_pipeline.py` 🔲 Pending
+**Implementation notes**:
+- Implemented in `build_crag_chain()` factory function.
+- Uses `retriever_service.retrieve_cold_only()` for cold path retrieval.
+- Relevance grading branches: generate on relevant docs, widen search on none.
+- Raises `DocumentNotFoundException` if still no relevant docs after widening.
+
+### 4.3 — `app/pipelines/ingest_pipeline.py` ✅ Done
 
 > ⚠️ Confirm scope with the open architectural decision before implementing.
 
@@ -754,7 +765,11 @@ async def run_ingest(documents: list[Document], repository: VectorStoreRepositor
     ...
 ```
 
-### 4.4 — `app/pipelines/agentic_pipeline.py` 🔲 Pending
+**Implementation notes**:
+- Entry point function `run_ingest()` accepts `list[Document]` and `VectorStoreRepository`.
+- Wraps `repository.upsert()` and raises `IngestException` on failure.
+
+### 4.4 — `app/pipelines/agentic_pipeline.py` ✅ Done
 
 **Pattern**: LangGraph `create_react_agent` executor with LangChain `@tool`-decorated functions that call TM-Backend's internal API.
 
@@ -786,11 +801,17 @@ async def get_flight_status(flight_number: str) -> dict:
 - Max iterations: 5. If the agent exceeds this, raise `AgentException`.
 - Built in a factory function `build_agentic_pipeline(llm_service, settings)` — not at module import time.
 
+**Implementation notes**:
+- Tools implemented as `@tool`-decorated async functions in `build_agentic_pipeline()`.
+- All HTTP calls use `httpx.AsyncClient` with `settings.backend_api_url`.
+- Agent executor from `langgraph.prebuilt.create_react_agent` with max 5 iterations.
+- Tool errors caught and re-raised as `AgentException`.
+
 ---
 
-## Phase 5 — Services 🔲 Pending
+## Phase 5 — Services ✅ Done
 
-### 5.1 — `app/services/llm_service.py` 🔲 Pending
+### 5.1 — `app/services/llm_service.py` ✅ Done
 
 **Pattern**: Thin wrapper around `ChatNVIDIA` that handles errors and exposes a clean interface.
 
@@ -811,7 +832,11 @@ class LLMService:
 - Wrap any `httpx` or NVIDIA SDK exception in `LLMUnavailableException`.
 - Log `detail` (original exception message) before raising — never include it in `message`.
 
-### 5.2 — `app/services/retriever_service.py` 🔲 Pending
+**Implementation notes**:
+- `LLMService` wraps `ChatNVIDIA` with error handling.
+- `get_json_client()` method returns a temperature-0.0 client for structured output tasks.
+
+### 5.2 — `app/services/retriever_service.py` ✅ Done
 
 **Pattern**: Repository pattern consumer — depends only on `VectorStoreRepository` interface.
 
@@ -860,7 +885,12 @@ class RetrieverService:
 
 > **Scope note**: `RetrieverService` is used exclusively by the CRAG pipeline. The Agentic pipeline does not use the vector store — it fetches all data via TM-Backend API tools.
 
-### 5.3 — `app/services/rag_service.py` 🔲 Pending
+**Implementation notes**:
+- `retrieve()` implements cold/hot path with FAISS re-ranking via `rerank()`.
+- `retrieve_cold_only()` skips re-ranking for CRAG pipeline.
+- Raises `DocumentNotFoundException` if no documents found.
+
+### 5.3 — `app/services/rag_service.py` ✅ Done
 
 **Pattern**: Single entry point and router — classifies query intent, dispatches to the correct pipeline, returns a unified `ChatResponse`.
 
@@ -906,7 +936,12 @@ class RAGService:
 
 **Error propagation**: Do not catch pipeline exceptions here — let them bubble to the route handler.
 
-### 5.4 — `app/services/intent_classifier.py` 🔲 Pending
+**Implementation notes**:
+- `answer()` calls `clean_query()` before processing.
+- IntentClassifier failure defaults to `"policy"` pipeline with warning log.
+- Dispatches to `_run_crag_pipeline()` or `_run_agentic_pipeline()` based on intent.
+
+### 5.4 — `app/services/intent_classifier.py` ✅ Done
 
 **Pattern**: LLM-based binary intent classifier with a fast, low-temperature prompt.
 
@@ -936,6 +971,12 @@ class IntentClassifier:
 - Use temperature `0.0` for this call — override at call time, do not change `settings.nvidia_temperature`.
 - Expected LLM output: JSON `{"intent": "user_data"}` or `{"intent": "policy"}`. Parse with `JsonOutputParser`.
 - If parsing fails or the value is not one of the two valid intents, raise `IntentClassificationException`.
+
+**Implementation notes**:
+- Uses temperature 0.0 `ChatNVIDIA` instance from `llm.get_json_client()`.
+- Parses LLM output as JSON with `JsonOutputParser`.
+- Validates intent is one of `"user_data"` or `"policy"`.
+- Raises `IntentClassificationException` on parse failure or invalid value.
 - Keep the classification prompt short — this runs on every request before the main pipeline.
 
 ---
