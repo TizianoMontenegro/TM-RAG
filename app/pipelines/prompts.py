@@ -1,4 +1,4 @@
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 # CRAG pipeline prompts
 CRAG_SYSTEM_PROMPT = """You are a helpful assistant for TM Airlines customers.
