@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     pgvector_collection_name: str = "tm_airlines_docs"
 
     # --- NVIDIA AI Endpoints ---
-    nvidia_api_key: str
+    nvidia_api_key: SecretStr
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_llm_model: str = "meta/llama-3.1-70b-instruct"
     nvidia_embedding_model: str = "nvidia/nv-embedqa-e5-v5"
