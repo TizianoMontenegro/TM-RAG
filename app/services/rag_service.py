@@ -1,4 +1,5 @@
 from app.core.exceptions import IntentClassificationException
+from app.core.logging import request_id_ctx_var
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.intent_classifier import IntentClassifier
 from app.services.llm_service import LLMService
@@ -70,7 +71,7 @@ class RAGService:
             response=response_text,
             conversation_id=request.conversation_id or "",
             sources=None,
-            request_id="",  # Will be set by middleware
+            request_id=request_id_ctx_var.get(),
         )
 
     async def _run_agentic_pipeline(
@@ -94,5 +95,5 @@ class RAGService:
             response=result.get("output", ""),
             conversation_id=request.conversation_id or "",
             sources=None,
-            request_id="",  # Will be set by middleware
+            request_id=request_id_ctx_var.get(),
         )
