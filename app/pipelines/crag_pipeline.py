@@ -6,12 +6,17 @@ from app.services.llm_service import LLMService
 from app.services.retriever_service import RetrieverService
 
 
-def build_crag_chain(retriever_service: RetrieverService, llm_service: LLMService):
+def build_crag_chain(
+    retriever_service: RetrieverService,
+    llm_service: LLMService,
+    embedding_model,
+):
     """Factory function to build the CRAG chain.
 
     Args:
         retriever_service: Service for retrieving documents.
         llm_service: Service for LLM access.
+        embedding_model: NVIDIAEmbeddings instance for query embedding.
 
     Returns:
         A runnable chain for CRAG pipeline.
@@ -22,8 +27,7 @@ def build_crag_chain(retriever_service: RetrieverService, llm_service: LLMServic
 
     async def retrieve_and_grade(query: str) -> dict:
         """Retrieve docs and grade relevance."""
-        # Embed query (placeholder - embedding integration needed)
-        query_vector = []  # TODO: integrate NVIDIAEmbeddings
+        query_vector = await embedding_model.aembed_query(query)
         docs = await retriever_service.retrieve_cold_only(query_vector, top_k=20)
 
         relevant_docs = []
