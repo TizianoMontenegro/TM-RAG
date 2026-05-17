@@ -22,18 +22,11 @@ async def chat(
     request: ChatRequest,
     rag_service=Depends(get_rag_service),
 ) -> ChatResponse:
-    """Chat endpoint — returns placeholder response until RAG is wired.
-
-    TODO: wire RAGService - replace placeholder with actual rag_service.answer(request)
-    """
+    """Chat endpoint — processes a query through the RAG pipeline."""
     try:
-        # Placeholder response - RAGService not yet implemented
-        return ChatResponse(
-            response="This is a placeholder response. RAG service not yet wired.",
-            conversation_id=request.conversation_id or "new-conversation",
-            sources=None,
-            request_id=request_id_ctx_var.get(),
-        )
+        result = await rag_service.answer(request)
+        result.request_id = request_id_ctx_var.get()
+        return result
     except DocumentNotFoundException as exc:
         logger.exception("Document not found")
         return JSONResponse(
