@@ -83,5 +83,11 @@ def get_rag_service(
     retriever: RetrieverService = Depends(get_retriever_service),
     llm: LLMService = Depends(get_llm_service),
     intent_classifier: IntentClassifier = Depends(get_intent_classifier),
+    embedding_model=Depends(get_embedding_model),
 ) -> RAGService:
-    return RAGService(retriever=retriever, llm=llm, intent_classifier=intent_classifier)
+    return RAGService(
+        retriever=retriever,
+        llm=llm,
+        intent_classifier=intent_classifier,
+        embedding_model=embedding_model,
+    )
