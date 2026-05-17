@@ -16,10 +16,12 @@ class RAGService:
         retriever: RetrieverService,
         llm: LLMService,
         intent_classifier: IntentClassifier,
+        embedding_model=None,
     ) -> None:
         self.retriever = retriever
         self.llm = llm
         self.intent_classifier = intent_classifier
+        self.embedding_model = embedding_model
 
     async def answer(self, request: ChatRequest) -> ChatResponse:
         """Process a chat request and return a response.
@@ -61,7 +63,7 @@ class RAGService:
         """
         from app.pipelines.crag_pipeline import build_crag_chain
 
-        chain = build_crag_chain(self.retriever, self.llm)
+        chain = build_crag_chain(self.retriever, self.llm, self.embedding_model)
         response_text = await chain.ainvoke(query)
 
         return ChatResponse(
