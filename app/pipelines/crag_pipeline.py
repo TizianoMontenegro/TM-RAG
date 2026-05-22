@@ -4,6 +4,7 @@ from app.core.exceptions import DocumentNotFoundException
 from app.pipelines.prompts import crag_prompt, crag_relevance_grader_prompt
 from app.services.llm_service import LLMService
 from app.services.retriever_service import RetrieverService
+from app.utils.text import truncate_context
 
 
 def build_crag_chain(
@@ -57,8 +58,9 @@ def build_crag_chain(
         if not relevant_docs:
             raise DocumentNotFoundException()
 
+        raw_context = "\n\n".join(d.page_content for d in relevant_docs)
         return {
-            "context": "\n\n".join(d.page_content for d in relevant_docs),
+            "context": truncate_context(raw_context),
             "question": query,
         }
 
