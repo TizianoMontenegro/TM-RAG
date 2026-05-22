@@ -180,7 +180,7 @@ EXCEPTION_STATUS_MAP = {
 | 4     | LangChain Pipelines             | ✅ Done        |
 | 5     | Services                        | ✅ Done        |
 | 6     | Utilities                       | ✅ Done        |
-| 7     | Testing                         | 🔲 Pending     |
+| 7     | Testing                         | ✅ Done        |
 | 8     | Linting, Formatting & CI Checks | 🔲 Pending     |
 
 ---
@@ -1007,9 +1007,9 @@ def truncate_context(context: str, max_tokens: int = 3000) -> str:
 
 ---
 
-## Phase 7 — Testing 🔲 Pending
+## Phase 7 — Testing ✅ Done
 
-### 7.1 — `tests/conftest.py` 🔲 Pending
+### 7.1 — `tests/conftest.py` ✅ Done
 
 **Fixtures to define**:
 
@@ -1037,7 +1037,7 @@ class MockRepository(VectorStoreRepository):
     async def delete(self, ids): pass
 ```
 
-### 7.2 — Unit tests 🔲 Pending
+### 7.2 — Unit tests ✅ Done
 
 #### `tests/unit/test_rag_service.py`
 
@@ -1068,7 +1068,7 @@ class MockRepository(VectorStoreRepository):
 - `test_classify_raises_on_invalid_response` — mock LLM returning unparseable JSON, assert `IntentClassificationException` is raised.
 - `test_classify_raises_on_unknown_intent_value` — mock LLM returning `{"intent": "unknown"}`, assert `IntentClassificationException` is raised.
 
-### 7.3 — Integration tests 🔲 Pending
+### 7.3 — Integration tests ✅ Done
 
 #### `tests/integration/test_health_endpoint.py`
 
