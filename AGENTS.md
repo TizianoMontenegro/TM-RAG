@@ -1,4 +1,4 @@
-﻿# AGENTS.md — TM Airlines RAG Service
+# AGENTS.md — TM Airlines RAG Service
 
 > **Purpose**: This file is the single source of truth for every agent, contributor, or AI tool
 > working on TM-RAG. It maps the full implementation sequence, marks what is done, defines
@@ -179,7 +179,7 @@ EXCEPTION_STATUS_MAP = {
 | 3     | Data Layer (Repositories)       | ✅ Done        |
 | 4     | LangChain Pipelines             | ✅ Done        |
 | 5     | Services                        | ✅ Done        |
-| 6     | Utilities                       | 🔲 Pending     |
+| 6     | Utilities                       | ✅ Done        |
 | 7     | Testing                         | 🔲 Pending     |
 | 8     | Linting, Formatting & CI Checks | 🔲 Pending     |
 
@@ -981,9 +981,9 @@ class IntentClassifier:
 
 ---
 
-## Phase 6 — Utilities 🔲 Pending
+## Phase 6 — Utilities ✅ Done
 
-### 6.1 — `app/utils/text.py` 🔲 Pending
+### 6.1 — `app/utils/text.py` ✅ Done
 
 **Functions to implement**:
 
