@@ -30,9 +30,7 @@ class FAISSRepository(VectorStoreRepository):
 
     def _get_embedding_model(self) -> Embeddings:
         if self._embedding_model is None:
-            raise RetrieverException(
-                detail="embedding_model is required to use FAISSRepository"
-            )
+            raise RetrieverException(detail="embedding_model is required to use FAISSRepository")
         return self._embedding_model
 
     def _ensure_vectorstore(self, documents: list[Document] | None = None) -> FAISS:
@@ -48,17 +46,11 @@ class FAISSRepository(VectorStoreRepository):
                     embedding=embedding_model,
                 )
             except Exception as exc:
-                raise RetrieverException(
-                    detail=f"Failed to build FAISS index: {exc}"
-                ) from exc
+                raise RetrieverException(detail=f"Failed to build FAISS index: {exc}") from exc
         else:
             try:
-                self._vectorstore = FAISS.from_texts(
-                    texts=[""], embedding=embedding_model
-                )
-                self._vectorstore.delete(
-                    [list(self._vectorstore.index_to_docstore_id.values())[0]]
-                )
+                self._vectorstore = FAISS.from_texts(texts=[""], embedding=embedding_model)
+                self._vectorstore.delete([list(self._vectorstore.index_to_docstore_id.values())[0]])
             except Exception as exc:
                 raise RetrieverException(
                     detail=f"Failed to initialize empty FAISS index: {exc}"
