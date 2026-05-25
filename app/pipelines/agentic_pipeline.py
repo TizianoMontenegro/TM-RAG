@@ -1,5 +1,5 @@
+from langchain.agents import AgentExecutor, create_react_agent
 from langchain.tools import tool
-from langchain.agents import create_react_agent, AgentExecutor
 
 from app.core.config import settings
 from app.core.exceptions import AgentException
@@ -14,9 +14,7 @@ async def get_booking(user_id: str, booking_id: str) -> dict:
 
     try:
         async with httpx.AsyncClient(base_url=settings.backend_api_url) as client:
-            response = await client.get(
-                f"/api/bookings/{booking_id}", params={"user_id": user_id}
-            )
+            response = await client.get(f"/api/bookings/{booking_id}", params={"user_id": user_id})
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
@@ -73,6 +71,4 @@ def build_agentic_pipeline(llm_service: LLMService, settings=settings):
     llm = llm_service.get_client()
     tools = [get_booking, get_user_profile, get_flight_status]
     agent = create_react_agent(llm, tools, prompt=agentic_prompt)
-    return AgentExecutor(
-        agent=agent, tools=tools, max_iterations=5, handle_parsing_errors=True
-    )
+    return AgentExecutor(agent=agent, tools=tools, max_iterations=5, handle_parsing_errors=True)
