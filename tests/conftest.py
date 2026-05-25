@@ -1,11 +1,14 @@
-import pytest
-from httpx import AsyncClient, ASGITransport
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock
+
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from langchain_core.documents import Document
 
 from app.core.config import Settings
 from app.repositories.base import VectorStoreRepository
+
 
 @pytest.fixture
 def mock_settings() -> Settings:
@@ -22,37 +25,42 @@ def mock_settings() -> Settings:
         nvidia_temperature=0.0,
         log_level="INFO",
         log_format="text",
-        backend_api_url="http://tm-backend-test:8000"
+        backend_api_url="http://tm-backend-test:8000",
     )
+
 
 @pytest.fixture
 def app(mock_settings: Settings):
-    from main import app as fastapi_app
     from app.api.deps import get_settings
+    from main import app as fastapi_app
+
     fastapi_app.dependency_overrides[get_settings] = lambda: mock_settings
     yield fastapi_app
     fastapi_app.dependency_overrides.clear()
+
 
 @pytest.fixture
 def mock_nvidia_client(mocker) -> MagicMock:
     return mocker.MagicMock()
 
-import pytest_asyncio
 
 @pytest_asyncio.fixture
 async def async_client(app) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
+
 class MockRepository(VectorStoreRepository):
     async def search(self, query_vector: list[float], top_k: int) -> list[Document]:
         return [Document(page_content="TM Airlines allows one free checked bag.")]
-    
+
     async def upsert(self, documents: list[Document]) -> None:
         pass
-    
+
     async def delete(self, ids: list[str]) -> None:
         pass
-        
-    async def rerank(self, candidates: list[Document], query_vector: list[float], top_k: int) -> list[Document]:
+
+    async def rerank(
+        self, candidates: list[Document], query_vector: list[float], top_k: int
+    ) -> list[Document]:
         return candidates[:top_k]
