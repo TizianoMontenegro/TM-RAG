@@ -21,7 +21,7 @@ class IntentClassifier:
             'policy'    — rules, fares, baggage allowances, legal terms, general information.
 
         Raises:
-            IntentClassificationException: If the LLM response cannot be parsed or is not a valid intent.
+            IntentClassificationException: If the LLM response cannot be parsed or is invalid.
         """
         prompt = f"""Classify the following query as 'user_data' or 'policy'.
 Return ONLY JSON: {{"intent": "user_data"}} or {{"intent": "policy"}}
