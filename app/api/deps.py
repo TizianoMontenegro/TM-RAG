@@ -6,8 +6,8 @@ from app.repositories.faiss_repository import FAISSRepository
 from app.repositories.pgvector_repository import PgVectorRepository
 from app.services.intent_classifier import IntentClassifier
 from app.services.llm_service import LLMService
-from app.services.retriever_service import RetrieverService
 from app.services.rag_service import RAGService
+from app.services.retriever_service import RetrieverService
 
 # ---------------------------------------------------------------------------
 # Settings
