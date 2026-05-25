@@ -4,9 +4,7 @@ from app.core.exceptions import IngestException
 from app.repositories.base import VectorStoreRepository
 
 
-async def run_ingest(
-    documents: list[Document], repository: VectorStoreRepository
-) -> None:
+async def run_ingest(documents: list[Document], repository: VectorStoreRepository) -> None:
     """Ingest documents into the vector store.
 
     Args:
