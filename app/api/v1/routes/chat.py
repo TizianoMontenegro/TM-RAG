@@ -3,15 +3,15 @@ import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from app.models.chat import ChatRequest, ChatResponse
-from app.models.common import ErrorResponse
-from app.core.logging import request_id_ctx_var
+from app.api.deps import get_rag_service
 from app.core.exceptions import (
-    RAGServiceException,
     DocumentNotFoundException,
     LLMUnavailableException,
+    RAGServiceException,
 )
-from app.api.deps import get_rag_service
+from app.core.logging import request_id_ctx_var
+from app.models.chat import ChatRequest, ChatResponse
+from app.models.common import ErrorResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["chat"])
