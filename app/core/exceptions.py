@@ -66,7 +66,7 @@ class IntentClassificationException(RAGServiceException):
 
 
 class AgentException(RAGServiceException):
-    """Raised when the agentic tool-calling pipeline fails (tool error or max iterations exceeded)."""
+    """Raised when the agentic tool-calling pipeline fails (tool error or max iterations)."""
 
     def __init__(
         self,
