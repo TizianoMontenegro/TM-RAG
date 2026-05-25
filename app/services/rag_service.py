@@ -1,3 +1,5 @@
+import logging
+
 from app.core.exceptions import IntentClassificationException
 from app.core.logging import request_id_ctx_var
 from app.models.chat import ChatRequest, ChatResponse
@@ -5,8 +7,6 @@ from app.services.intent_classifier import IntentClassifier
 from app.services.llm_service import LLMService
 from app.services.retriever_service import RetrieverService
 from app.utils.text import clean_query
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -34,25 +34,21 @@ class RAGService:
             ChatResponse with generated response and metadata.
 
         Raises:
-            IntentClassificationException: If intent classification fails (handled by defaulting to policy).
+            IntentClassificationException: If intent classification fails (defaults to policy).
             Other exceptions bubble up to route handler.
         """
         query = clean_query(request.query)
         try:
             intent = await self.intent_classifier.classify(query)
         except IntentClassificationException:
-            logger.warning(
-                "Intent classification failed — defaulting to policy pipeline"
-            )
+            logger.warning("Intent classification failed — defaulting to policy pipeline")
             intent = "policy"
 
         if intent == "user_data":
             return await self._run_agentic_pipeline(request, query)
         return await self._run_crag_pipeline(request, query)
 
-    async def _run_crag_pipeline(
-        self, request: ChatRequest, query: str
-    ) -> ChatResponse:
+    async def _run_crag_pipeline(self, request: ChatRequest, query: str) -> ChatResponse:
         """Run CRAG pipeline for policy queries.
 
         Args:
@@ -74,9 +70,7 @@ class RAGService:
             request_id=request_id_ctx_var.get(),
         )
 
-    async def _run_agentic_pipeline(
-        self, request: ChatRequest, query: str
-    ) -> ChatResponse:
+    async def _run_agentic_pipeline(self, request: ChatRequest, query: str) -> ChatResponse:
         """Run agentic pipeline for user-data queries.
 
         Args:
