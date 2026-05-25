@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
-from app.models.common import HealthResponse
 from app.core.config import settings
+from app.models.common import HealthResponse
 
 router = APIRouter(prefix="/v1", tags=["health"])
 
@@ -14,5 +14,5 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status="ok",
         version=settings.app_version,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
