@@ -42,9 +42,7 @@ class PgVectorRepository(VectorStoreRepository):
                     use_jsonb=True,
                 )
             except Exception as exc:
-                raise RetrieverException(
-                    detail=f"Failed to initialize PGVector: {exc}"
-                ) from exc
+                raise RetrieverException(detail=f"Failed to initialize PGVector: {exc}") from exc
         return self._vectorstore
 
     async def search(self, query_vector: list[float], top_k: int) -> list[Document]:
@@ -55,9 +53,7 @@ class PgVectorRepository(VectorStoreRepository):
                     k=top_k,
                 )
             except Exception as exc:
-                raise RetrieverException(
-                    detail=f"PgVector search failed: {exc}"
-                ) from exc
+                raise RetrieverException(detail=f"PgVector search failed: {exc}") from exc
 
         return await asyncio.to_thread(_search)
 
@@ -66,9 +62,7 @@ class PgVectorRepository(VectorStoreRepository):
             try:
                 self._get_vectorstore().add_documents(documents=documents)
             except Exception as exc:
-                raise RetrieverException(
-                    detail=f"PgVector upsert failed: {exc}"
-                ) from exc
+                raise RetrieverException(detail=f"PgVector upsert failed: {exc}") from exc
 
         await asyncio.to_thread(_upsert)
 
@@ -77,9 +71,7 @@ class PgVectorRepository(VectorStoreRepository):
             try:
                 self._get_vectorstore().delete(ids=ids)
             except Exception as exc:
-                raise RetrieverException(
-                    detail=f"PgVector delete failed: {exc}"
-                ) from exc
+                raise RetrieverException(detail=f"PgVector delete failed: {exc}") from exc
 
         await asyncio.to_thread(_delete)
 
