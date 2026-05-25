@@ -128,9 +128,7 @@ class JSONFormatter(logging.Formatter):
 # ---------------------------------------------------------------------------
 # Text formatter (development)
 # ---------------------------------------------------------------------------
-TEXT_FORMAT = (
-    "%(asctime)s | %(levelname)-8s | %(name)s | [%(request_id)s] | %(message)s"
-)
+TEXT_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | [%(request_id)s] | %(message)s"
 TEXT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
 
