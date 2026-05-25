@@ -34,9 +34,9 @@ def build_crag_chain(
         relevant_docs = []
         for doc in docs:
             try:
-                result = await (
-                    crag_relevance_grader_prompt | json_llm | relevance_parser
-                ).ainvoke({"document": doc.page_content, "question": query})
+                result = await (crag_relevance_grader_prompt | json_llm | relevance_parser).ainvoke(
+                    {"document": doc.page_content, "question": query}
+                )
                 if result.get("score") == "relevant":
                     relevant_docs.append(doc)
             except Exception:
