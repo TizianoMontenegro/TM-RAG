@@ -21,9 +21,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     allowed_origins: list[str] = ["*"]
-    backend_api_url: (
-        str  # Internal TM-Backend API base URL — required by Agentic pipeline
-    )
+    backend_api_url: str  # Internal TM-Backend API base URL — required by Agentic pipeline
 
     # --- PostgreSQL / pgvector ---
     database_url: str
