@@ -318,9 +318,3 @@ TM-RAG/
         ├── test_chat_endpoint.py
         └── test_health_endpoint.py
 ```
-
----
-
-## 📄 License
-
-Proprietary — TM Airlines
