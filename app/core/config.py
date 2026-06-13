@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     nvidia_max_tokens: int = 1024
     nvidia_temperature: float = Field(default=0.2, ge=0.0, le=1.0)
 
+    # --- TM-Backend Service Auth ---
+    tm_rag_api_key: SecretStr  # Long-lived JWT for TM-Backend service auth
+
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["json", "text"] = "text"
