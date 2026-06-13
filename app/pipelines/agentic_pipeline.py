@@ -1,9 +1,9 @@
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import create_agent
 from langchain.tools import tool
 
 from app.core.config import settings
 from app.core.exceptions import AgentException
-from app.pipelines.prompts import agentic_prompt
+from app.pipelines.prompts import AGENTIC_SYSTEM_PROMPT
 from app.services.llm_service import LLMService
 
 
@@ -13,8 +13,11 @@ async def get_booking(user_id: str, booking_id: str) -> dict:
     import httpx
 
     try:
-        async with httpx.AsyncClient(base_url=settings.backend_api_url) as client:
-            response = await client.get(f"/api/bookings/{booking_id}", params={"user_id": user_id})
+        headers = {"Authorization": f"Bearer {settings.tm_rag_api_key.get_secret_value()}"}
+        async with httpx.AsyncClient(base_url=settings.backend_api_url, headers=headers) as client:
+            response = await client.get(
+                f"/api/v1/bookings/{booking_id}/", params={"user_id": user_id}
+            )
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
@@ -30,8 +33,9 @@ async def get_user_profile(user_id: str) -> dict:
     import httpx
 
     try:
-        async with httpx.AsyncClient(base_url=settings.backend_api_url) as client:
-            response = await client.get(f"/api/users/{user_id}/profile")
+        headers = {"Authorization": f"Bearer {settings.tm_rag_api_key.get_secret_value()}"}
+        async with httpx.AsyncClient(base_url=settings.backend_api_url, headers=headers) as client:
+            response = await client.get(f"/api/v1/users/{user_id}/profile/")
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
@@ -47,8 +51,9 @@ async def get_flight_status(flight_number: str) -> dict:
     import httpx
 
     try:
-        async with httpx.AsyncClient(base_url=settings.backend_api_url) as client:
-            response = await client.get(f"/api/flights/{flight_number}/status")
+        headers = {"Authorization": f"Bearer {settings.tm_rag_api_key.get_secret_value()}"}
+        async with httpx.AsyncClient(base_url=settings.backend_api_url, headers=headers) as client:
+            response = await client.get(f"/api/v1/flights/{flight_number}/status/")
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
@@ -58,17 +63,15 @@ async def get_flight_status(flight_number: str) -> dict:
         ) from e
 
 
-def build_agentic_pipeline(llm_service: LLMService, settings=settings):
+def build_agentic_pipeline(llm_service: LLMService) -> object:
     """Factory function to build the agentic pipeline.
 
     Args:
         llm_service: Service for LLM access.
-        settings: Application settings (defaults to global settings).
 
     Returns:
-        An AgentExecutor instance.
+        A compiled state graph that can be invoked with messages.
     """
     llm = llm_service.get_client()
     tools = [get_booking, get_user_profile, get_flight_status]
-    agent = create_react_agent(llm, tools, prompt=agentic_prompt)
-    return AgentExecutor(agent=agent, tools=tools, max_iterations=5, handle_parsing_errors=True)
+    return create_agent(llm, tools, system_prompt=AGENTIC_SYSTEM_PROMPT)
