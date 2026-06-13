@@ -26,6 +26,7 @@ def mock_settings() -> Settings:
         log_level="INFO",
         log_format="text",
         backend_api_url="http://tm-backend-test:8000",
+        tm_rag_api_key="test_service_jwt_key",
     )
 
 
