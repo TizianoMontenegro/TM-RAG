@@ -80,13 +80,18 @@ class RAGService:
         Returns:
             ChatResponse with generated response.
         """
+        from langchain_core.messages import HumanMessage
+
         from app.pipelines.agentic_pipeline import build_agentic_pipeline
 
-        agent_executor = build_agentic_pipeline(self.llm)
-        result = await agent_executor.ainvoke({"input": query, "chat_history": []})
+        agent = build_agentic_pipeline(self.llm)
+        result = await agent.ainvoke({"messages": [HumanMessage(content=query)]})
+
+        messages = result.get("messages", [])
+        response_text = messages[-1].content if messages else ""
 
         return ChatResponse(
-            response=result.get("output", ""),
+            response=str(response_text),
             conversation_id=request.conversation_id or "",
             sources=None,
             request_id=request_id_ctx_var.get(),
