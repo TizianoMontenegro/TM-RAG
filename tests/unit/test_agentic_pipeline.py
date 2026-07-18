@@ -72,7 +72,7 @@ async def test_get_flight_status_sends_service_jwt_header_and_v1_url(mocker):
 
     # Verify the URL is called correctly via the mocked client.get
     call_url = mock_get.call_args[0][0]
-    assert "/api/v1/flights/TM100/status/" in call_url
+    assert "/api/v1/rag/flights/TM100/status/" in call_url
 
 
 @pytest.mark.asyncio
