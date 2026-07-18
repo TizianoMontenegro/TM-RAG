@@ -16,7 +16,7 @@ async def get_booking(user_id: str, booking_id: str) -> dict:
         headers = {"Authorization": f"Bearer {settings.tm_rag_api_key.get_secret_value()}"}
         async with httpx.AsyncClient(base_url=settings.backend_api_url, headers=headers) as client:
             response = await client.get(
-                f"/api/v1/bookings/{booking_id}/", params={"user_id": user_id}
+                f"/api/v1/rag/bookings/{booking_id}/", params={"user_id": user_id}
             )
             response.raise_for_status()
             return response.json()
@@ -35,7 +35,7 @@ async def get_user_profile(user_id: str) -> dict:
     try:
         headers = {"Authorization": f"Bearer {settings.tm_rag_api_key.get_secret_value()}"}
         async with httpx.AsyncClient(base_url=settings.backend_api_url, headers=headers) as client:
-            response = await client.get(f"/api/v1/users/{user_id}/profile/")
+            response = await client.get(f"/api/v1/rag/users/{user_id}/")
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
@@ -53,7 +53,7 @@ async def get_flight_status(flight_number: str) -> dict:
     try:
         headers = {"Authorization": f"Bearer {settings.tm_rag_api_key.get_secret_value()}"}
         async with httpx.AsyncClient(base_url=settings.backend_api_url, headers=headers) as client:
-            response = await client.get(f"/api/v1/flights/{flight_number}/status/")
+            response = await client.get(f"/api/v1/rag/flights/{flight_number}/status/")
             response.raise_for_status()
             return response.json()
     except httpx.HTTPError as e:
