@@ -1,4 +1,5 @@
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.runnables import RunnableLambda
 
 from app.core.exceptions import DocumentNotFoundException
 from app.pipelines.prompts import crag_prompt, crag_relevance_grader_prompt
@@ -68,4 +69,4 @@ def build_crag_chain(
         """Generate response from context and question."""
         return await (crag_prompt | llm | StrOutputParser()).ainvoke(inputs)
 
-    return retrieve_and_grade | generate
+    return RunnableLambda(retrieve_and_grade) | RunnableLambda(generate)
