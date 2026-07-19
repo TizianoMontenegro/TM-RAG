@@ -14,7 +14,7 @@ crag_prompt = ChatPromptTemplate.from_messages(
 
 CRAG_RELEVANCE_GRADER_PROMPT = """You are a relevance grader.
 Given the following retrieved document and user question, respond ONLY with JSON:
-{"score": "relevant"} or {"score": "not_relevant"}.
+{{"score": "relevant"}} or {{"score": "not_relevant"}}.
 
 Document: {document}
 Question: {question}"""
