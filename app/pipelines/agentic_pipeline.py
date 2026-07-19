@@ -74,4 +74,4 @@ def build_agentic_pipeline(llm_service: LLMService) -> object:
     """
     llm = llm_service.get_client()
     tools = [get_booking, get_user_profile, get_flight_status]
-    return create_agent(llm, tools, system_prompt=AGENTIC_SYSTEM_PROMPT)
+    return create_agent(llm, tools, system_prompt=AGENTIC_SYSTEM_PROMPT, recursion_limit=5)
