@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.middleware import RequestIDMiddleware
+from app.api.middleware import JWTAuthMiddleware, RequestIDMiddleware
 from app.api.v1.routes.chat import router as chat_router
 from app.api.v1.routes.health import router as health_router
 from app.core.config import settings
@@ -41,6 +41,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
