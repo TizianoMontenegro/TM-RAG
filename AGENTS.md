@@ -181,7 +181,8 @@ EXCEPTION_STATUS_MAP = {
 | 5     | Services                        | ✅ Done        |
 | 6     | Utilities                       | ✅ Done        |
 | 7     | Testing                         | ✅ Done        |
-| 8     | Linting, Formatting & CI Checks | 🔲 Pending     |
+| 8     | Linting, Formatting & CI Checks | ✅ Done        |
+| 9     | Deployment Infrastructure       | ✅ Done        |
 
 ---
 
@@ -1085,7 +1086,7 @@ class MockRepository(VectorStoreRepository):
 
 ---
 
-## Phase 8 — Linting, Formatting & CI Checks 🔲 Pending
+## Phase 8 — Linting, Formatting & CI Checks ✅ Done
 
 Run before every commit. All three must pass with zero errors before any PR is opened.
 
@@ -1096,7 +1097,7 @@ uv run ruff check .
 uv run pytest
 ```
 
-**Ruff configuration** (add to `pyproject.toml`):
+**Ruff configuration** (in `pyproject.toml`):
 ```toml
 [tool.ruff]
 line-length = 100
@@ -1106,7 +1107,7 @@ target-version = "py312"
 select = ["E", "F", "I", "UP"]
 ```
 
-**pytest configuration** (add to `pyproject.toml`):
+**pytest configuration** (in `pyproject.toml`):
 ```toml
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -1125,6 +1126,12 @@ uv run python -m uvicorn main:app        # Dev server
 ```
 
 - Dev server: `reload=True` when `settings.debug=True`, otherwise `reload=False`
+
+### CI
+
+GitHub Actions workflow at `.github/workflows/ci.yml`:
+- **lint-and-test**: `uv sync` → `ruff check .` → `ruff format --check .` → `pytest -v`
+- **docker-build** (depends on lint-and-test): `docker build -t tm-rag:$SHA .`
 
 ---
 
@@ -1223,6 +1230,78 @@ main.py (wires everything, imports from all above)
 
 ---
 
+## Phase 9 — Deployment Infrastructure ✅ Done
+
+### 9.1 — Dockerfile ✅ Done
+
+**Pattern**: Multi-stage build for minimal production image.
+
+| Stage | Base Image | Purpose |
+|-------|-----------|---------|
+| `builder` | `python:3.12-slim` | Install `uv`, copy `pyproject.toml` + `uv.lock`, `uv sync --no-dev --frozen` |
+| `runtime` | `python:3.12-slim` | Copy `.venv` + `app/` + `main.py`, non-root `appuser` |
+
+- Final image runs as non-root `appuser` (uid 1000)
+- Exposes port `8000`
+- CMD: `uvicorn main:app --host 0.0.0.0 --port 8000`
+
+### 9.2 — docker-compose.yml ✅ Done
+
+Two services for local development:
+
+| Service | Image | Ports | Healthcheck |
+|---------|-------|-------|-------------|
+| `tm-rag` | Builds from Dockerfile | `8000:8000` | HTTP GET `/v1/health` |
+| `pgvector` | `pgvector/pgvector:pg16` | `5432:5432` | `pg_isready` |
+
+- `tm-rag` depends on `pgvector` with `condition: service_healthy`
+- Persistent volume `pgdata` for PostgreSQL data
+- `PG_PASSWORD` env var for PostgreSQL credentials
+
+### 9.3 — JWT Auth Middleware ✅ Done
+
+**Pattern**: Starlette `BaseHTTPMiddleware` for inbound JWT validation.
+
+- **New setting**: `jwt_signing_key: str` (required, no default) in `app/core/config.py`
+- **Middleware**: `JWTAuthMiddleware` in `app/api/middleware.py`
+  - Extracts `Authorization: Bearer <token>` header
+  - Validates with `PyJWT` using HS256 + `settings.jwt_signing_key`
+  - Returns `401` on missing/invalid/expired token
+  - Exempts `/v1/health` and `/v1/health/ready` (probes need unauthenticated access)
+- Registered in `main.py` after `RequestIDMiddleware`, before `CORSMiddleware`
+
+### 9.4 — Readiness Probe ✅ Done
+
+**Pattern**: Two-endpoint health check (liveness + readiness).
+
+| Endpoint | Purpose | Auth | Checks |
+|----------|---------|------|--------|
+| `GET /v1/health` | Liveness probe | Exempt | None (static) |
+| `GET /v1/health/ready` | Readiness probe | Exempt | pgvector + NVIDIA |
+
+**Readiness check details**:
+- `check_pgvector()`: Executes `SELECT 1` via SQLAlchemy async engine
+- `check_nvidia()`: Invokes LLM with "hi" and 3s timeout
+- Returns `200 {"status": "ok"}` when all checks pass
+- Returns `503 {"status": "degraded"}` when any check fails
+- New model: `ReadinessResponse` in `app/models/common.py`
+
+### 9.5 — GitHub Actions CI ✅ Done
+
+**File**: `.github/workflows/ci.yml`
+
+Two jobs:
+1. **lint-and-test**: `uv sync` → `ruff check .` → `ruff format --check .` → `pytest -v`
+2. **docker-build** (depends on lint-and-test): `docker build -t tm-rag:$SHA .`
+
+Triggers on push to `main` and PRs to `main`.
+
+### 9.6 — Dependencies ✅ Done
+
+Added `PyJWT` (v2.13.0) for inbound JWT validation.
+
+---
+
 ## Invariants — Do Not Break These
 
 | Rule | Rationale |
@@ -1236,6 +1315,7 @@ main.py (wires everything, imports from all above)
 | `AGENTS.md` reflects only implemented code | Describing pending suggestions as done violates the accuracy contract |
 | The Agentic pipeline is the only component permitted to make outbound HTTP calls to TM-Backend | All other pipelines are document-retrieval only — cross-pipeline HTTP calls break the separation contract |
 | `IntentClassifier` failure must default to the `"policy"` pipeline, never hard-fail the request | The CRAG pipeline is safer — it is document-grounded and cannot expose user data |
+| All inbound requests must include a valid JWT in `Authorization: Bearer <token>` | Except `/v1/health` and `/v1/health/ready` which are exempt for Docker/K8s probes |
 
 
 
