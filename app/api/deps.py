@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import Depends
 
 from app.core.config import settings
@@ -91,3 +93,41 @@ def get_rag_service(
         intent_classifier=intent_classifier,
         embedding_model=embedding_model,
     )
+
+
+# ---------------------------------------------------------------------------
+# Readiness checks
+# ---------------------------------------------------------------------------
+
+_READINESS_TIMEOUT = 3.0
+
+
+async def check_pgvector() -> str:
+    """Ping PostgreSQL via SQLAlchemy async engine."""
+    try:
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        engine = create_async_engine(settings.database_url)
+        async with engine.connect() as conn:
+            await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+        await engine.dispose()
+        return "ok"
+    except Exception:
+        return "unavailable"
+
+
+async def check_nvidia(llm_service: LLMService) -> str:
+    """Ping NVIDIA API via a minimal LLM invoke."""
+    try:
+        client = llm_service.get_client()
+        await asyncio.wait_for(client.ainvoke("hi"), timeout=_READINESS_TIMEOUT)
+        return "ok"
+    except Exception:
+        return "unavailable"
+
+
+def get_readiness_service(
+    llm: LLMService = Depends(get_llm_service),
+) -> LLMService:
+    """Return the LLM service for readiness checks."""
+    return llm
