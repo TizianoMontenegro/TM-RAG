@@ -11,6 +11,15 @@ class HealthResponse(BaseModel):
     timestamp: datetime
 
 
+class ReadinessResponse(BaseModel):
+    """Response model for readiness check endpoint."""
+
+    status: str  # "ok" | "degraded"
+    version: str
+    checks: dict[str, str]  # {"pgvector": "ok", "nvidia": "unavailable"}
+    request_id: str
+
+
 class ErrorResponse(BaseModel):
     """Response model for error responses.
 
