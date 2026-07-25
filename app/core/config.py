@@ -37,6 +37,7 @@ class Settings(BaseSettings):
 
     # --- TM-Backend Service Auth ---
     tm_rag_api_key: SecretStr  # Long-lived JWT for TM-Backend service auth
+    jwt_signing_key: str  # Shared secret for validating inbound JWTs from TM-Backend
 
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
