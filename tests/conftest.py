@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock
 
+import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -27,6 +28,7 @@ def mock_settings() -> Settings:
         log_format="text",
         backend_api_url="http://tm-backend-test:8000",
         tm_rag_api_key="test_service_jwt_key",
+        jwt_signing_key="test_jwt_signing_key",
     )
 
 
@@ -49,6 +51,14 @@ def mock_nvidia_client(mocker) -> MagicMock:
 async def async_client(app) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
+
+
+@pytest.fixture
+def valid_auth_headers() -> dict[str, str]:
+    from app.core.config import settings as real_settings
+
+    token = jwt.encode({"sub": "test-user"}, real_settings.jwt_signing_key, algorithm="HS256")
+    return {"Authorization": f"Bearer {token}"}
 
 
 class MockRepository(VectorStoreRepository):
