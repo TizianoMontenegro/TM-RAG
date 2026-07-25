@@ -7,7 +7,7 @@ from app.models.chat import ChatResponse
 
 
 @pytest.mark.asyncio
-async def test_chat_returns_200(async_client, mocker):
+async def test_chat_returns_200(async_client, mocker, valid_auth_headers):
     mock_rag = mocker.MagicMock()
     mock_rag.answer = AsyncMock(
         return_value=ChatResponse(
@@ -20,7 +20,9 @@ async def test_chat_returns_200(async_client, mocker):
 
     app.dependency_overrides[get_rag_service] = lambda: mock_rag
 
-    response = await async_client.post("/v1/chat", json={"query": "hello", "user_id": "user1"})
+    response = await async_client.post(
+        "/v1/chat", json={"query": "hello", "user_id": "user1"}, headers=valid_auth_headers
+    )
 
     app.dependency_overrides.pop(get_rag_service, None)
 
@@ -29,7 +31,7 @@ async def test_chat_returns_200(async_client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_chat_propagates_request_id(async_client, mocker):
+async def test_chat_propagates_request_id(async_client, mocker, valid_auth_headers):
     mock_rag = mocker.MagicMock()
     mock_rag.answer = AsyncMock(
         return_value=ChatResponse(
@@ -45,7 +47,7 @@ async def test_chat_propagates_request_id(async_client, mocker):
     response = await async_client.post(
         "/v1/chat",
         json={"query": "hello", "user_id": "user1"},
-        headers={"X-Request-ID": "test-req-id"},
+        headers={**valid_auth_headers, "X-Request-ID": "test-req-id"},
     )
 
     app.dependency_overrides.pop(get_rag_service, None)
@@ -55,7 +57,7 @@ async def test_chat_propagates_request_id(async_client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_chat_returns_503_on_llm_failure(async_client, mocker):
+async def test_chat_returns_503_on_llm_failure(async_client, mocker, valid_auth_headers):
     mock_rag = mocker.MagicMock()
     mock_rag.answer.side_effect = LLMUnavailableException(message="llm error", detail="detail")
 
@@ -64,7 +66,9 @@ async def test_chat_returns_503_on_llm_failure(async_client, mocker):
 
     app.dependency_overrides[get_rag_service] = lambda: mock_rag
 
-    response = await async_client.post("/v1/chat", json={"query": "hello", "user_id": "user1"})
+    response = await async_client.post(
+        "/v1/chat", json={"query": "hello", "user_id": "user1"}, headers=valid_auth_headers
+    )
 
     app.dependency_overrides.pop(get_rag_service, None)
 
@@ -73,7 +77,7 @@ async def test_chat_returns_503_on_llm_failure(async_client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_chat_returns_404_on_no_documents(async_client, mocker):
+async def test_chat_returns_404_on_no_documents(async_client, mocker, valid_auth_headers):
     mock_rag = mocker.MagicMock()
     mock_rag.answer.side_effect = DocumentNotFoundException(message="not found", detail="detail")
 
@@ -82,7 +86,9 @@ async def test_chat_returns_404_on_no_documents(async_client, mocker):
 
     app.dependency_overrides[get_rag_service] = lambda: mock_rag
 
-    response = await async_client.post("/v1/chat", json={"query": "hello", "user_id": "user1"})
+    response = await async_client.post(
+        "/v1/chat", json={"query": "hello", "user_id": "user1"}, headers=valid_auth_headers
+    )
 
     app.dependency_overrides.pop(get_rag_service, None)
 
@@ -91,6 +97,24 @@ async def test_chat_returns_404_on_no_documents(async_client, mocker):
 
 
 @pytest.mark.asyncio
-async def test_chat_rejects_empty_query(async_client):
-    response = await async_client.post("/v1/chat", json={"query": "", "user_id": "user1"})
+async def test_chat_rejects_empty_query(async_client, valid_auth_headers):
+    response = await async_client.post(
+        "/v1/chat", json={"query": "", "user_id": "user1"}, headers=valid_auth_headers
+    )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_chat_returns_401_without_token(async_client):
+    response = await async_client.post("/v1/chat", json={"query": "hello", "user_id": "user1"})
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_chat_returns_401_with_invalid_token(async_client):
+    response = await async_client.post(
+        "/v1/chat",
+        json={"query": "hello", "user_id": "user1"},
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert response.status_code == 401
