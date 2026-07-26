@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -19,6 +20,8 @@ from app.core.exceptions import (
 )
 from app.core.logging import request_id_ctx_var, setup_logging
 
+logger = logging.getLogger(__name__)
+
 EXCEPTION_STATUS_MAP: dict[type[RAGServiceException], int] = {
     DocumentNotFoundException: 404,
     LLMUnavailableException: 503,
@@ -32,6 +35,8 @@ EXCEPTION_STATUS_MAP: dict[type[RAGServiceException], int] = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+    if "*" in settings.allowed_origins and not settings.debug:
+        logger.warning("CORS allows all origins in production — restrict ALLOWED_ORIGINS")
     yield
 
 
