@@ -54,3 +54,12 @@ async def chat(
                 request_id=request_id_ctx_var.get(),
             ).model_dump(),
         )
+    except Exception:
+        logger.exception("Unexpected error in chat endpoint")
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(
+                error="An unexpected error occurred. Please try again later.",
+                request_id=request_id_ctx_var.get(),
+            ).model_dump(),
+        )
