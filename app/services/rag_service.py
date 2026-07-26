@@ -85,7 +85,10 @@ class RAGService:
         from app.pipelines.agentic_pipeline import build_agentic_pipeline
 
         agent = build_agentic_pipeline(self.llm)
-        result = await agent.ainvoke({"messages": [HumanMessage(content=query)]})
+        result = await agent.ainvoke(
+            {"messages": [HumanMessage(content=query)]},
+            config={"recursion_limit": 5},
+        )
 
         messages = result.get("messages", [])
         response_text = messages[-1].content if messages else ""
