@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     tm_rag_api_key: SecretStr  # Long-lived JWT for TM-Backend service auth
     jwt_signing_key: str  # Shared secret for validating inbound JWTs from TM-Backend
 
+    # --- Rate Limiting ---
+    rate_limit_default: str = "30/minute"  # Global rate limit (slowapi format)
+    rate_limit_chat: str = "10/minute"  # Rate limit for POST /v1/chat
+
     # --- Logging ---
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_format: Literal["json", "text"] = "text"
