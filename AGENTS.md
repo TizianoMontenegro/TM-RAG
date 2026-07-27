@@ -90,6 +90,7 @@ The `repositories/` layer (abstract interface + pgvector/FAISS implementations) 
 | Python Version     | 3.12+                               |
 | Linting/Formatting | Ruff                                |
 | Testing            | pytest + pytest-asyncio             |
+| Rate Limiting      | slowapi                             |
 
 ---
 
@@ -230,6 +231,7 @@ uv add langchain langchain-nvidia-ai-endpoints langchain-community
 uv add pgvector psycopg2-binary sqlalchemy
 uv add faiss-cpu
 uv add httpx
+uv add slowapi
 
 uv add --dev pytest pytest-asyncio ruff
 ```
@@ -262,6 +264,7 @@ settings.app_name             # str
 settings.app_version          # str  — default "0.1.0"
 settings.debug                # bool
 settings.allowed_origins      # list[str]
+settings.backend_api_url      # str  — no default, fails at startup if missing
 
 # PostgreSQL
 settings.database_url         # str  — no default, fails at startup if missing
@@ -272,6 +275,14 @@ settings.nvidia_api_key       # SecretStr — no default, fails at startup if mi
 settings.nvidia_llm_model     # str
 settings.nvidia_embedding_model    # str
 settings.nvidia_temperature   # float
+
+# TM-Backend Service Auth
+settings.tm_rag_api_key       # SecretStr — no default, fails at startup if missing
+settings.jwt_signing_key      # str  — no default, fails at startup if missing
+
+# Rate Limiting
+settings.rate_limit_default   # str  — default "30/minute"
+settings.rate_limit_chat      # str  — default "10/minute"
 
 # Logging
 settings.log_level            # str
@@ -290,10 +301,12 @@ settings.log_format           # str ("json" | "text")
 **Class hierarchy**:
 ```
 RAGServiceException (base)
-├── LLMUnavailableException    — NVIDIA API unreachable or returning errors
-├── RetrieverException         — pgvector or FAISS failure
-├── DocumentNotFoundException  — retrieval returned zero results
-└── IngestException            — document ingestion pipeline failure
+├── LLMUnavailableException        — NVIDIA API unreachable or returning errors
+├── RetrieverException             — pgvector or FAISS failure
+├── DocumentNotFoundException      — retrieval returned zero results
+├── IngestException                — document ingestion pipeline failure
+├── IntentClassificationException  — intent classifier failed to determine query type
+└── AgentException                 — agentic tool-calling pipeline failure
 ```
 
 **Key design**:
@@ -455,11 +468,17 @@ def get_retriever_service(
 def get_llm_service(settings: Settings = Depends(get_settings)) -> LLMService:
     return LLMService(settings=settings)
 
+def get_intent_classifier(
+    llm: LLMService = Depends(get_llm_service),
+) -> IntentClassifier:
+    return IntentClassifier(llm=llm)
+
 def get_rag_service(
     retriever: RetrieverService = Depends(get_retriever_service),
     llm: LLMService = Depends(get_llm_service),
+    intent_classifier: IntentClassifier = Depends(get_intent_classifier),
 ) -> RAGService:
-    return RAGService(retriever=retriever, llm=llm)
+    return RAGService(retriever=retriever, llm=llm, intent_classifier=intent_classifier)
 ```
 
 **Note**: If the repositories layer decision (⚠️ Phase 3) is not yet confirmed, implement
@@ -772,7 +791,7 @@ async def run_ingest(documents: list[Document], repository: VectorStoreRepositor
 
 ### 4.4 — `app/pipelines/agentic_pipeline.py` ✅ Done
 
-**Pattern**: LangGraph `create_react_agent` executor with LangChain `@tool`-decorated functions that call TM-Backend's internal API.
+**Pattern**: LangChain `create_agent` executor with LangChain `@tool`-decorated functions that call TM-Backend's internal API.
 
 **When used**: All queries classified as `"user_data"` by `IntentClassifier` — booking status, itinerary details, seat assignments, user preferences, check-in eligibility.
 
@@ -798,14 +817,14 @@ async def get_flight_status(flight_number: str) -> dict:
 **Implementation notes**:
 - All tool HTTP calls use `httpx.AsyncClient` with base URL from `settings.backend_api_url`. Never hardcode URLs.
 - Any `httpx` error inside a tool must be caught and re-raised as `AgentException` with a user-safe `message` and the original exception as `detail`.
-- Agent executor: `langgraph.prebuilt.create_react_agent(llm, tools, prompt=agentic_prompt)`.
-- Max iterations: 5. If the agent exceeds this, raise `AgentException`.
-- Built in a factory function `build_agentic_pipeline(llm_service, settings)` — not at module import time.
+- Agent executor: `langchain.agents.create_agent(llm, tools, system_prompt=AGENTIC_SYSTEM_PROMPT)`.
+- Max iterations: 5. Set `recursion_limit` at invoke time via `config={"recursion_limit": 5}`.
+- Built in a factory function `build_agentic_pipeline(llm_service)` — not at module import time.
 
 **Implementation notes**:
 - Tools implemented as `@tool`-decorated async functions in `build_agentic_pipeline()`.
 - All HTTP calls use `httpx.AsyncClient` with `settings.backend_api_url`.
-- Agent executor from `langgraph.prebuilt.create_react_agent` with max 5 iterations.
+- Agent executor from `langchain.agents.create_agent` with max 5 iterations at invoke time.
 - Tool errors caught and re-raised as `AgentException`.
 
 ---
@@ -852,30 +871,26 @@ class RetrieverService:
         self.cold_repo = cold_repo
 
     async def retrieve(
-        self, query_vector: list[float], hot: bool = False
+        self, query_vector: list[float], hot: bool = False, top_k: int = 20
     ) -> list[Document]:
         if hot:
             return await self.hot_repo.search(query_vector, top_k=5)
 
         # Cold path: fetch broad candidates from pgvector, then re-rank
         # within that candidate set via FAISS.
-        #
-        # ⚠️ Design note: passing candidates to hot_repo.search() does NOT
-        # implement re-ranking. A global FAISS search runs over the full
-        # in-memory index and ignores the pgvector candidates entirely.
-        # Correct re-ranking requires building a temporary FAISS index from
-        # the candidate documents and searching within that subset only.
-        # This likely requires a dedicated rerank() method on FAISSRepository
-        # rather than reusing search().
-        #
-        # TODO (Phase 3 - resolved): resolve this before implementing — confirm whether
-        # FAISSRepository.rerank(candidates, query_vector, top_k) is added
-        # to the VectorStoreRepository interface or handled differently.
-        candidates = await self.cold_repo.search(query_vector, top_k=20)
-        raise NotImplementedError(
-            "Cold-path re-ranking is pending resolution of the FAISSRepository "
-            "rerank() design decision. See Phase 3 open architectural decision."
-        )
+        candidates = await self.cold_repo.search(query_vector, top_k=top_k)
+        if not candidates:
+            raise DocumentNotFoundException()
+        return await self.hot_repo.rerank(candidates, query_vector, top_k=5)
+
+    async def retrieve_cold_only(
+        self, query_vector: list[float], top_k: int = 20
+    ) -> list[Document]:
+        """Retrieve from cold store only (used by CRAG pipeline)."""
+        docs = await self.cold_repo.search(query_vector, top_k=top_k)
+        if not docs:
+            raise DocumentNotFoundException()
+        return docs
 ```
 
 **Rules**:
@@ -1036,6 +1051,8 @@ class MockRepository(VectorStoreRepository):
         return [Document(page_content="TM Airlines allows one free checked bag.")]
     async def upsert(self, documents): pass
     async def delete(self, ids): pass
+    async def rerank(self, candidates, query_vector, top_k):
+        return candidates[:top_k]
 ```
 
 ### 7.2 — Unit tests ✅ Done
@@ -1270,7 +1287,31 @@ Two services for local development:
   - Exempts `/v1/health` and `/v1/health/ready` (probes need unauthenticated access)
 - Registered in `main.py` after `RequestIDMiddleware`, before `CORSMiddleware`
 
-### 9.4 — Readiness Probe ✅ Done
+### 9.4 — Rate Limiting ✅ Done
+
+**Pattern**: slowapi `Limiter` with in-memory storage, applied as a default limit to all routes with per-route overrides.
+
+**Implementation**:
+- `Limiter` instance created in `app/api/middleware.py` with `default_limits=[settings.rate_limit_default]`.
+- `app.state.limiter` set in `main.py` and `_rate_limit_exceeded_handler` registered.
+- `@limiter.limit(settings.rate_limit_chat)` applied to `POST /v1/chat` for stricter per-endpoint throttling.
+- Health endpoints (`/v1/health`, `/v1/health/ready`) are exempt from rate limiting (checked via `EXEMPT_PATHS` in `JWTAuthMiddleware`).
+
+**Design decisions**:
+- **Key function**: `get_remote_address` — rate-limits by client IP (TM-Backend's calling IP).
+- **Storage**: In-memory (slowapi default) — no Redis dependency. Sufficient for single-instance deployment.
+- **Headers**: Disabled (`headers_enabled=False`) — internal service-to-service API, no client-facing rate limit headers needed.
+- **Defaults**: `30/minute` global, `10/minute` on `/v1/chat` (NVIDIA LLM is the expensive resource).
+
+**Config values** (both in `config.py` and `.env.example`):
+```
+RATE_LIMIT_DEFAULT=30/minute   # Global rate limit (slowapi format)
+RATE_LIMIT_CHAT=10/minute      # Stricter limit for POST /v1/chat
+```
+
+**429 response**: slowapi returns `{"detail": "Rate limit exceeded: ...", "error": "..."}` with HTTP 429 automatically.
+
+### 9.5 — Readiness Probe ✅ Done
 
 **Pattern**: Two-endpoint health check (liveness + readiness).
 
@@ -1299,6 +1340,7 @@ Triggers on push to `main` and PRs to `main`.
 ### 9.6 — Dependencies ✅ Done
 
 Added `PyJWT` (v2.13.0) for inbound JWT validation.
+Added `slowapi` (v0.1.10) for rate limiting.
 
 ---
 
