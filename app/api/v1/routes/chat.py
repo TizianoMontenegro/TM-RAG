@@ -2,8 +2,11 @@ import logging
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
+from starlette.requests import Request as StarletteRequest
 
 from app.api.deps import get_rag_service
+from app.api.middleware import limiter
+from app.core.config import settings
 from app.core.exceptions import (
     DocumentNotFoundException,
     LLMUnavailableException,
@@ -18,13 +21,15 @@ router = APIRouter(prefix="/v1", tags=["chat"])
 
 
 @router.post("/chat", response_model=ChatResponse)
+@limiter.limit(settings.rate_limit_chat)
 async def chat(
-    request: ChatRequest,
+    body: ChatRequest,
+    request: StarletteRequest,
     rag_service=Depends(get_rag_service),
 ) -> ChatResponse:
     """Chat endpoint — processes a query through the RAG pipeline."""
     try:
-        result = await rag_service.answer(request)
+        result = await rag_service.answer(body)
         result.request_id = request_id_ctx_var.get()
         return result
     except DocumentNotFoundException as exc:
