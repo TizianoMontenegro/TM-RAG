@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from app.api.middleware import JWTAuthMiddleware, RequestIDMiddleware
+from app.api.middleware import JWTAuthMiddleware, RequestIDMiddleware, limiter
 from app.api.v1.routes.chat import router as chat_router
 from app.api.v1.routes.health import router as health_router
 from app.core.config import settings
@@ -45,6 +47,8 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(
