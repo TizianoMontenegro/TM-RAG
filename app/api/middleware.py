@@ -3,11 +3,22 @@ from collections.abc import Awaitable, Callable
 
 import jwt
 from fastapi import Request, Response
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.logging import request_id_ctx_var
+
+# --- Rate Limiter ---
+# Module-level singleton. Key = client IP. Default limit from config.
+# Health endpoints are exempt via EXEMPT_PATHS below.
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[settings.rate_limit_default],
+    headers_enabled=False,
+)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
